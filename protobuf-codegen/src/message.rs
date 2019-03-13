@@ -41,11 +41,13 @@ impl<'a> MessageGen<'a> {
             root_scope: root_scope,
             type_name: message.rust_name(),
             fields: fields,
-            lite_runtime: message
-                .get_file_descriptor()
-                .get_options()
-                .get_optimize_for() ==
-                FileOptions_OptimizeMode::LITE_RUNTIME,
+            lite_runtime: customize.lite_runtime.unwrap_or_else(|| {
+                message
+                    .get_file_descriptor()
+                    .get_options()
+                    .get_optimize_for() ==
+                    FileOptions_OptimizeMode::LITE_RUNTIME
+            }),
             customize,
         }
     }

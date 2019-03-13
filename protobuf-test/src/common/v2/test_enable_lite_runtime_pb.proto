@@ -1,0 +1,17 @@
+syntax = "proto2";
+
+package test_enable_lite_runtime;
+
+import "rustproto.proto";
+
+option (rustproto.lite_runtime_all) = true;
+
+enum EnumTestLiteRuntime {
+    UNKNOWN = 0;
+    ONE = 1;
+    TWO = 2;
+}
+
+message TestLiteRuntime {
+    optional int32 v = 1;
+}

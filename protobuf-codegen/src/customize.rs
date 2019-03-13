@@ -17,6 +17,8 @@ pub struct Customize {
     pub carllerche_bytes_for_bytes: Option<bool>,
     /// Use `bytes::Bytes` for `string` fields
     pub carllerche_bytes_for_string: Option<bool>,
+    /// Enable lite runtime
+    pub lite_runtime: Option<bool>,
 }
 
 impl Customize {
@@ -37,6 +39,9 @@ impl Customize {
         if let Some(v) = that.carllerche_bytes_for_string {
             self.carllerche_bytes_for_string = Some(v);
         }
+        if let Some(v) = that.lite_runtime {
+            self.lite_runtime = Some(v);
+        }
     }
 
     /// Update unset fields of self with fields from other customize
@@ -54,12 +59,14 @@ pub fn customize_from_rustproto_for_message(source: &MessageOptions) -> Customiz
     let generate_accessors = rustproto::exts::generate_accessors.get(source);
     let carllerche_bytes_for_bytes = rustproto::exts::carllerche_bytes_for_bytes.get(source);
     let carllerche_bytes_for_string = rustproto::exts::carllerche_bytes_for_string.get(source);
+    let lite_runtime = None;
     Customize {
         expose_oneof,
         expose_fields,
         generate_accessors,
         carllerche_bytes_for_bytes,
         carllerche_bytes_for_string,
+        lite_runtime,
     }
 }
 
@@ -69,12 +76,14 @@ pub fn customize_from_rustproto_for_field(source: &FieldOptions) -> Customize {
     let generate_accessors = rustproto::exts::generate_accessors_field.get(source);
     let carllerche_bytes_for_bytes = rustproto::exts::carllerche_bytes_for_bytes_field.get(source);
     let carllerche_bytes_for_string = rustproto::exts::carllerche_bytes_for_string_field.get(source);
+    let lite_runtime = None;
     Customize {
         expose_oneof,
         expose_fields,
         generate_accessors,
         carllerche_bytes_for_bytes,
         carllerche_bytes_for_string,
+        lite_runtime,
     }
 }
 
@@ -84,11 +93,13 @@ pub fn customize_from_rustproto_for_file(source: &FileOptions) -> Customize {
     let generate_accessors = rustproto::exts::generate_accessors_all.get(source);
     let carllerche_bytes_for_bytes = rustproto::exts::carllerche_bytes_for_bytes_all.get(source);
     let carllerche_bytes_for_string = rustproto::exts::carllerche_bytes_for_string_all.get(source);
+    let lite_runtime = rustproto::exts::lite_runtime_all.get(source);
     Customize {
         expose_oneof,
         expose_fields,
         generate_accessors,
         carllerche_bytes_for_bytes,
         carllerche_bytes_for_string,
+        lite_runtime,
     }
 }
