@@ -51,7 +51,7 @@ impl<'a> EnumGen<'a> {
     pub fn new(
         enum_with_scope: &'a EnumWithScope<'a>,
         current_file: &FileDescriptorProto,
-        _customize: &Customize
+        customize: &Customize
     ) -> EnumGen<'a> {
         let rust_name = if enum_with_scope.get_scope().get_file_descriptor().get_name() ==
             current_file.get_name()
@@ -67,15 +67,18 @@ impl<'a> EnumGen<'a> {
                 enum_with_scope.rust_name()
             )
         };
+        let lite_runtime = customize.lite_runtime.unwrap_or_else(|| {
+                enum_with_scope
+                    .get_scope()
+                    .get_file_descriptor()
+                    .get_options()
+                    .get_optimize_for() ==
+                    FileOptions_OptimizeMode::LITE_RUNTIME
+            });
         EnumGen {
             enum_with_scope: enum_with_scope,
             type_name: rust_name,
-            lite_runtime: enum_with_scope
-                .get_scope()
-                .get_file_descriptor()
-                .get_options()
-                .get_optimize_for() ==
-                FileOptions_OptimizeMode::LITE_RUNTIME,
+            lite_runtime,
         }
     }
 

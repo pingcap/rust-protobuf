@@ -111,6 +111,11 @@ fn gen_file(
     let mut customize = customize.clone();
     // options specified in invocation have precedence over options specified in file
     customize.update_with(&customize_from_rustproto_for_file(file.get_options()));
+    let lite_runtime = customize.lite_runtime.unwrap_or_else(|| {
+                file.get_options()
+                    .get_optimize_for() ==
+                    FileOptions_OptimizeMode::LITE_RUNTIME
+            });
 
     let scope = FileScope { file_descriptor: file }.to_scope();
 
@@ -141,7 +146,7 @@ fn gen_file(
 
         write_extensions(file, &root_scope, &mut w);
 
-        if file.get_options().get_optimize_for() != FileOptions_OptimizeMode::LITE_RUNTIME {
+        if !lite_runtime {
             w.write_line("");
             write_file_descriptor_data(file, &mut w);
         }
