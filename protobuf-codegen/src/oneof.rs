@@ -182,8 +182,21 @@ impl<'a> OneofGen<'a> {
         RustType::Option(Box::new(self.type_name.clone()))
     }
 
+    fn write_impl_show(&self, w: &mut CodeWriter) {
+        let name = self.type_name.to_code(&self.customize);
+        w.impl_for_block("crate::text::PbPrint", &name, |w| {
+            w.def_fn("fmt(&self, name: &str, buf: &mut String)", |w| {
+                w.write_line("match self {");
+                for variant in self.variants_except_group() {
+                    w.write_line(&format!("    {}::{}(v) => crate::text::PbPrint::fmt(v, name, buf),", name, variant.field.rust_name));
+                }
+                w.write_line("}");
+            })
+        });
+    }
+
     pub fn write_enum(&self, w: &mut CodeWriter) {
-        let derive = vec!["Clone", "PartialEq", "Debug"];
+        let derive = vec!["Clone", "PartialEq"];
         w.derive(&derive);
         serde::write_serde_attr(w, &self.customize, "derive(Serialize, Deserialize)");
         w.pub_enum(&self.type_name.to_code(&self.customize), |w| {
@@ -195,5 +208,7 @@ impl<'a> OneofGen<'a> {
                 ));
             }
         });
+        w.write_line("");
+        self.write_impl_show(w);
     }
 }
