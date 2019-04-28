@@ -125,12 +125,27 @@ impl<'a> EnumGen<'a> {
         self.write_impl_enum(w);
         w.write_line("");
         self.write_impl_copy(w);
+        w.write_line("");
+        self.write_impl_show(w);
         if self.enum_with_scope.scope.file_scope.syntax() == Syntax::PROTO3 {
             w.write_line("");
             self.write_impl_default(w);
         }
         w.write_line("");
         self.write_impl_value(w);
+    }
+
+    fn write_impl_show(&self, w: &mut CodeWriter) {
+        w.impl_for_block("crate::text::PbPrint", &self.type_name, |w| {
+            w.def_fn("fmt(&self, name: &str, buf: &mut String)", |w| {
+                w.write_line("use std::fmt::Write;");
+                w.write_line(&format!("if *self == {}::default() {{", self.type_name));
+                w.write_line("    return;");
+                w.write_line("}");
+                w.write_line(r#"crate::text::push_field_start(name, buf);"#);
+                w.write_line(r#"write!(buf, "{:?}", self).unwrap();"#);
+            })
+        });
     }
 
     fn write_struct(&self, w: &mut CodeWriter) {

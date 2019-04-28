@@ -151,11 +151,20 @@ impl<'a> OneofGen<'a> {
         RustType::Option(Box::new(self.type_name.clone()))
     }
 
+    fn write_impl_show(&self, w: &mut CodeWriter) {
+        w.impl_for_block("crate::text::PbPrint", &self.type_name.to_string(), |w| {
+            w.def_fn("fmt(&self, name: &str, buf: &mut String)", |w| {
+                w.write_line("match self {");
+                for variant in self.variants_except_group() {
+                    w.write_line(&format!("    {}::{}(v) => crate::text::PbPrint::fmt(v, name, buf),", self.type_name, variant.field.rust_name));
+                }
+                w.write_line("}");
+            })
+        });
+    }
+
     pub fn write_enum(&self, w: &mut CodeWriter) {
-        let mut derive = vec!["Clone", "PartialEq"];
-        if self.lite_runtime {
-            derive.push("Debug");
-        }
+        let derive = vec!["Clone", "PartialEq"];
         w.derive(&derive);
         w.pub_enum(&self.type_name.to_string(), |w| {
             for variant in self.variants_except_group() {
@@ -166,5 +175,7 @@ impl<'a> OneofGen<'a> {
                 ));
             }
         });
+        w.write_line("");
+        self.write_impl_show(w);
     }
 }
