@@ -8,6 +8,7 @@ use descriptor::FieldDescriptorProto;
 /// utilities to work with descriptor
 use descriptor::FileDescriptorProto;
 use descriptor::OneofDescriptorProto;
+use heck::CamelCase;
 
 use rust;
 use strx;
@@ -453,7 +454,7 @@ impl EnumValueDescriptorEx for EnumValueDescriptorProto {
         if rust::is_rust_keyword(self.get_name()) {
             r.push_str("value_");
         }
-        r.push_str(self.get_name());
+        r.push_str(&self.get_name().to_camel_case());
         r
     }
 }

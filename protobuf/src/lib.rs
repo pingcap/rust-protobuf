@@ -13,6 +13,7 @@ extern crate serde;
 #[cfg(feature = "with-serde")]
 
 extern crate serde_derive;
+extern crate heck;
 pub use cached_size::CachedSize;
 #[cfg(feature = "bytes")]
 pub use chars::Chars;
