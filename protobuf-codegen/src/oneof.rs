@@ -7,7 +7,7 @@ use message::MessageGen;
 use protobuf::descriptor::FieldDescriptorProto_Type;
 use protobuf::descriptorx::OneofWithContext;
 use protobuf::descriptorx::WithScope;
-use protobuf::descriptorx::{FieldWithContext, OneofVariantWithContext, RootScope};
+use protobuf::descriptorx::{camel_case, FieldWithContext, OneofVariantWithContext, RootScope};
 use rust_types_values::RustType;
 use serde;
 use std::collections::HashSet;
@@ -90,14 +90,15 @@ impl<'a> OneofVariantGen<'a> {
         _root_scope: &RootScope,
         customize: Customize,
     ) -> OneofVariantGen<'a> {
+        let mut field = field.clone();
+        field.rust_name = camel_case(&field.rust_name);
         OneofVariantGen {
             oneof: oneof,
             variant: variant.clone(),
-            field: field.clone(),
             path: format!(
                 "{}::{}",
                 oneof.type_name.to_code(&field.customize),
-                field.rust_name
+                camel_case(&field.rust_name)
             ),
             oneof_field: OneofField::parse(
                 variant.oneof,
@@ -105,6 +106,7 @@ impl<'a> OneofVariantGen<'a> {
                 field.oneof().elem.clone(),
                 oneof.message.root_scope,
             ),
+            field,
             customize,
         }
     }
@@ -145,11 +147,7 @@ impl<'a> OneofGen<'a> {
     }
 
     pub fn name(&self) -> &str {
-        match self.oneof.oneof.get_name() {
-            "type" => "field_type",
-            "box" => "field_box",
-            x => x,
-        }
+        self.oneof.name()
     }
 
     pub fn variants_except_group(&'a self) -> Vec<OneofVariantGen<'a>> {

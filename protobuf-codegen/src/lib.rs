@@ -1,4 +1,5 @@
 extern crate protobuf;
+extern crate heck;
 
 use std::collections::hash_map::HashMap;
 use std::fmt::Write as FmtWrite;

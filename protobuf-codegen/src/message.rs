@@ -275,8 +275,8 @@ impl<'a> MessageGen<'a> {
                     ));
                 }
                 AccessorStyle::HasGet => {
-                    w.write_line(&format!("{}::has_{},", self.type_name, field.rust_name));
-                    w.write_line(&format!("{}::get_{},", self.type_name, field.rust_name));
+                    w.write_line(&format!("{}::has_{},", self.type_name, field.unesc_rust_name));
+                    w.write_line(&format!("{}::get_{},", self.type_name, field.unesc_rust_name));
                 }
             }
         });

@@ -301,7 +301,7 @@ pub trait WithScope<'a> {
     // message or enum name
     fn get_name(&self) -> &'a str;
 
-    fn escape_prefix(&self) -> &'static str;
+    fn escape_prefix(&self) -> &'static str { "r#" }
 
     fn name_to_package(&self) -> String {
         let mut r = self.get_scope().prefix();
@@ -322,8 +322,17 @@ pub trait WithScope<'a> {
         r
     }
 
+    fn rust_name(&self) -> String;
+
+    // rust type name of this descriptor without escaping
+    fn unesc_rust_name(&self) -> String {
+        let mut r = self.get_scope().rust_prefix();
+        r.push_str(self.get_name());
+        r
+    }
+
     // rust type name of this descriptor
-    fn rust_name(&self) -> String {
+    fn esc_rust_name(&self) -> String {
         let mut r = self.get_scope().rust_prefix();
         // Only escape if prefix is not empty
         if r.is_empty() && rust::is_rust_keyword(self.get_name()) {
@@ -354,12 +363,12 @@ impl<'a> WithScope<'a> for MessageWithScope<'a> {
         &self.scope
     }
 
-    fn escape_prefix(&self) -> &'static str {
-        "message_"
-    }
-
     fn get_name(&self) -> &'a str {
         self.message.get_name()
+    }
+
+    fn rust_name(&self) -> String {
+        camel_case(&self.esc_rust_name())
     }
 }
 
@@ -451,10 +460,10 @@ impl EnumValueDescriptorEx for EnumValueDescriptorProto {
     fn rust_name(&self) -> String {
         let mut r = String::new();
         if rust::is_rust_keyword(self.get_name()) {
-            r.push_str("value_");
+            r.push_str("r#");
         }
         r.push_str(self.get_name());
-        r
+        camel_case(&r)
     }
 }
 
@@ -463,12 +472,12 @@ impl<'a> WithScope<'a> for EnumWithScope<'a> {
         &self.scope
     }
 
-    fn escape_prefix(&self) -> &'static str {
-        "enum_"
-    }
-
     fn get_name(&self) -> &'a str {
         self.en.get_name()
+    }
+
+    fn rust_name(&self) -> String {
+        camel_case(&self.esc_rust_name())
     }
 }
 
@@ -485,32 +494,37 @@ impl<'a> WithScope<'a> for MessageOrEnumWithScope<'a> {
         }
     }
 
-    fn escape_prefix(&self) -> &'static str {
-        match self {
-            &MessageOrEnumWithScope::Message(ref m) => m.escape_prefix(),
-            &MessageOrEnumWithScope::Enum(ref e) => e.escape_prefix(),
-        }
-    }
-
     fn get_name(&self) -> &'a str {
         match self {
             &MessageOrEnumWithScope::Message(ref m) => m.get_name(),
             &MessageOrEnumWithScope::Enum(ref e) => e.get_name(),
         }
     }
+
+    fn rust_name(&self) -> String {
+        match self {
+            &MessageOrEnumWithScope::Message(ref m) => m.rust_name(),
+            &MessageOrEnumWithScope::Enum(ref e) => e.rust_name(),
+        }
+    }
 }
 
 pub trait FieldDescriptorProtoExt {
     fn rust_name(&self) -> String;
+    fn unesc_rust_name(&self) -> String;
 }
 
 impl FieldDescriptorProtoExt for FieldDescriptorProto {
     fn rust_name(&self) -> String {
-        if rust::is_rust_keyword(self.get_name()) {
-            format!("field_{}", self.get_name())
+        snake_case(&if rust::is_rust_keyword(self.get_name()) {
+            format!("r#{}", self.get_name())
         } else {
             self.get_name().to_string()
-        }
+        })
+    }
+
+    fn unesc_rust_name(&self) -> String {
+        snake_case(&self.get_name().to_string())
     }
 }
 
@@ -588,7 +602,7 @@ impl<'a> OneofWithContext<'a> {
     pub fn rust_name(&self) -> String {
         format!(
             "{}_oneof_{}",
-            self.message.rust_name(),
+            self.message.unesc_rust_name(),
             self.oneof.get_name()
         )
     }
@@ -654,4 +668,15 @@ mod test {
     fn test_mod_path_empty_ext() {
         assert_eq!("proto", proto_path_to_rust_mod("proto"));
     }
+}
+
+use heck::{CamelCase, SnakeCase};
+
+pub fn snake_case(s: &str) -> String {
+    s.to_snake_case()
+}
+
+/// Converts a `snake_case` identifier to an `UpperCamel` case Rust type identifier.
+pub fn camel_case(s: &str) -> String {
+    s.to_camel_case()
 }
