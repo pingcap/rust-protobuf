@@ -403,19 +403,19 @@ impl<'a> MessageGen<'a> {
     fn write_impl_show(&self, w: &mut CodeWriter) {
         let normal_fields = self.fields_except_oneof_and_group();
         let oneofs = self.oneofs();
-        w.impl_for_block("crate::text::PbPrint", &self.type_name, |w| {
+        w.impl_for_block("::protobuf::PbPrint", &self.type_name, |w| {
             w.allow(&["unused_variables"]);
             w.def_fn("fmt(&self, name: &str, buf: &mut String)", |w| {
                 if normal_fields.is_empty() && oneofs.is_empty() {
                     return;
                 }
-                w.write_line(r#"crate::text::push_message_start(name, buf);"#);
+                w.write_line(r#"::protobuf::push_message_start(name, buf);"#);
                 w.write_line(r#"let old_len = buf.len();"#);
                 for field in &normal_fields {
-                    w.write_line(&format!("crate::text::PbPrint::fmt(&self.{}, \"{}\", buf);", field.rust_name, field.rust_name));
+                    w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", buf);", field.rust_name, field.rust_name));
                 }
                 for oneof in &oneofs {
-                    w.write_line(&format!("crate::text::PbPrint::fmt(&self.{}, \"{}\", buf);", oneof.name(), oneof.name()));
+                    w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", buf);", oneof.name(), oneof.name()));
                 }
                 w.write_line("if old_len < buf.len() {");
                 w.write_line("  buf.push(' ');");
@@ -435,10 +435,10 @@ impl<'a> MessageGen<'a> {
                     }
                     w.write_line("let mut s = String::new();");
                     for field in &normal_fields {
-                        w.write_line(&format!("crate::text::PbPrint::fmt(&self.{}, \"{}\", &mut s);", field.rust_name, field.rust_name));
+                        w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);", field.rust_name, field.rust_name));
                     }
                     for oneof in &oneofs {
-                        w.write_line(&format!("crate::text::PbPrint::fmt(&self.{}, \"{}\", &mut s);", oneof.name(), oneof.name()));
+                        w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);", oneof.name(), oneof.name()));
                     }
                     w.write_line(r#"write!(f, "{}", s)"#);
                 },

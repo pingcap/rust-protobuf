@@ -25,6 +25,7 @@ pub use core::parse_length_delimited_from;
 pub use core::parse_length_delimited_from_bytes;
 pub use core::parse_length_delimited_from_reader;
 pub use core::Message;
+pub use core::{push_field_start, push_message_start, PbPrint};
 pub use enums::ProtobufEnum;
 pub use error::ProtobufError;
 pub use error::ProtobufResult;
