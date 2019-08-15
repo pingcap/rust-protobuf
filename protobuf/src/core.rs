@@ -19,7 +19,7 @@ use stream::WithCodedInputStream;
 use stream::WithCodedOutputStream;
 use unknown::UnknownFields;
 use repeated::RepeatedField;
-use singular::SingularPtrField;
+use singular::{SingularField, SingularPtrField};
 
 /// Trait implemented for all generated structs for protobuf messages.
 ///
@@ -417,6 +417,16 @@ impl<T: PbPrint> PbPrint for RepeatedField<T> {
 }
 
 impl<T: PbPrint> PbPrint for SingularPtrField<T> {
+    #[inline]
+    fn fmt(&self, name: &str, buf: &mut String) {
+        match self.as_ref() {
+            None => return,
+            Some(v) => v.fmt(name, buf),
+        }
+    }
+}
+
+impl<T: PbPrint> PbPrint for SingularField<T> {
     #[inline]
     fn fmt(&self, name: &str, buf: &mut String) {
         match self.as_ref() {
