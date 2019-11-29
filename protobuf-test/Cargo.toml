@@ -31,3 +31,4 @@ bytes = { version = "0.4", optional = true }
 
 [dependencies.protobuf]
 path = "../protobuf"
+package = "nrc-protobuf"

@@ -10,7 +10,7 @@ doctest = false
 bench = false
 
 [dependencies]
-protobuf = { path = "../../protobuf" }
+protobuf = { package = "nrc-protobuf", path = "../../protobuf" }
 
 [features]
 default-features = []

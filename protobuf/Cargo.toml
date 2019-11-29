@@ -1,14 +1,16 @@
 [package]
 
-name = "protobuf"
+name = "nrc-protobuf"
 version = "2.8.0"
-authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+authors = ["Nick Cameron <nrc@ncameron.org>", "Stepan Koltsov <stepan.koltsov@gmail.com>"]
 license = "MIT"
-homepage = "https://github.com/stepancheg/rust-protobuf/"
-repository = "https://github.com/stepancheg/rust-protobuf/"
-documentation = "https://github.com/stepancheg/rust-protobuf/blob/master/README.md"
+homepage = "https://github.com/nrc/rust-protobuf/"
+repository = "https://github.com/nrc/rust-protobuf/"
+documentation = "https://github.com/nrc/rust-protobuf/blob/master/README.md"
 description = """
 Rust implementation of Google protocol buffers
+
+A minor fork of https://github.com/stepancheg/rust-protobuf/
 """
 
 [lib]

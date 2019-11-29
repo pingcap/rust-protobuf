@@ -1,23 +1,25 @@
 [package]
-name = "protobuf-codegen"
+name = "nrc-protobuf-codegen"
 version = "2.8.0"
-authors = ["Stepan Koltsov <stepan.koltsov@gmail.com>"]
+authors = ["Nick Cameron <nrc@ncameron.org>", "Stepan Koltsov <stepan.koltsov@gmail.com>"]
 license = "MIT"
-homepage = "https://github.com/stepancheg/rust-protobuf/"
-repository = "https://github.com/stepancheg/rust-protobuf/"
+homepage = "https://github.com/nrc/rust-protobuf/"
+repository = "https://github.com/nrc/rust-protobuf/"
 description = """
 Code generator for rust-protobuf.
 
 Includes a library and `protoc-gen-rust` binary.
 
 See `protoc-rust` and `protobuf-codegen-pure` crates.
+
+A minor fork of https://github.com/stepancheg/rust-protobuf/
 """
 
 [lib]
 bench = false
 
 [dependencies]
-protobuf = { path = "../protobuf", version = "=2.8.0" }
+protobuf = { package = "nrc-protobuf", version = "=2.8.0" }
 heck = "0.3"
 
 [[bin]]

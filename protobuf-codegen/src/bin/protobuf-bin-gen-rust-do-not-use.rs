@@ -1,5 +1,5 @@
 extern crate protobuf;
-extern crate protobuf_codegen;
+extern crate nrc_protobuf_codegen as protobuf_codegen;
 
 use std::fs::*;
 use std::io::Read;
