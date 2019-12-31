@@ -294,7 +294,7 @@ impl<'ignore> BufReadIter<'ignore> {
                 return Err(ProtobufError::WireError(WireError::UnexpectedEof));
             }
 
-            let r = bytes.slice(self.pos_within_buf, end);
+            let r = bytes.slice(self.pos_within_buf..end);
             self.pos_within_buf += len;
             Ok(r)
         } else {
@@ -307,7 +307,7 @@ impl<'ignore> BufReadIter<'ignore> {
             } else {
                 let mut r = BytesMut::with_capacity(len);
                 unsafe {
-                    let buf = &mut r.bytes_mut()[..len];
+                    let buf = std::slice::from_raw_parts_mut(r.as_mut_ptr(), len);
                     self.read_exact(buf)?;
                 }
                 unsafe {
@@ -318,6 +318,7 @@ impl<'ignore> BufReadIter<'ignore> {
         }
     }
 
+    /// Returns 0 when EOF or limit reached.
     pub fn read(&mut self, buf: &mut [u8]) -> ProtobufResult<usize> {
         self.fill_buf()?;
 
