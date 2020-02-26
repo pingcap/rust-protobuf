@@ -1,5 +1,5 @@
 [package]
-name = "nrc-protobuf-codegen"
+name = "protobuf-codegen"
 version = "2.8.0"
 authors = ["Nick Cameron <nrc@ncameron.org>", "Stepan Koltsov <stepan.koltsov@gmail.com>"]
 license = "MIT"
@@ -19,7 +19,7 @@ A minor fork of https://github.com/stepancheg/rust-protobuf/
 bench = false
 
 [dependencies]
-protobuf = { package = "nrc-protobuf", version = "=2.8.0" }
+protobuf = { package = "protobuf", version = "=2.8.0" }
 heck = "0.3"
 
 [[bin]]
