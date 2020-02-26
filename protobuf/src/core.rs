@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::any::TypeId;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write as _;
 use std::io::Read;
@@ -12,14 +13,14 @@ use clear::Clear;
 use error::ProtobufError;
 use error::ProtobufResult;
 use reflect::MessageDescriptor;
+use repeated::RepeatedField;
+use singular::{SingularField, SingularPtrField};
 use stream::with_coded_output_stream_to_bytes;
 use stream::CodedInputStream;
 use stream::CodedOutputStream;
 use stream::WithCodedInputStream;
 use stream::WithCodedOutputStream;
 use unknown::UnknownFields;
-use repeated::RepeatedField;
-use singular::{SingularField, SingularPtrField};
 
 /// Trait implemented for all generated structs for protobuf messages.
 ///
@@ -325,7 +326,9 @@ pub fn push_message_start(name: &str, buf: &mut String) {
 #[inline]
 pub fn push_field_start(name: &str, buf: &mut String) {
     push_start(name, buf);
-    buf.push_str(": ");
+    if !name.is_empty() {
+        buf.push_str(": ");
+    }
 }
 
 impl<T: PbPrint> PbPrint for Option<T> {
@@ -369,6 +372,23 @@ impl<T: PbPrint> PbPrint for Vec<T> {
         for v in self {
             v.fmt(name, buf);
         }
+    }
+}
+
+impl<K: PbPrint, V: PbPrint, S> PbPrint for HashMap<K, V, S> {
+    #[inline]
+    fn fmt(&self, name: &str, buf: &mut String) {
+        if self.is_empty() {
+            return;
+        }
+        push_field_start(name, buf);
+        buf.push_str("map[");
+        for (k, v) in self {
+            k.fmt("", buf);
+            buf.push(':');
+            v.fmt("", buf);
+        }
+        buf.push_str(" ]");
     }
 }
 
