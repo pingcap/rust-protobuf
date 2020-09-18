@@ -5,6 +5,9 @@ use std::fmt;
 use std::fmt::Write as _;
 use std::io::Read;
 use std::io::Write;
+use std::sync::atomic::Ordering;
+
+use atomic_flags::REDACT_BYTES;
 
 #[cfg(feature = "bytes")]
 use bytes::Bytes;
@@ -307,6 +310,12 @@ pub fn hex_escape(data: &[u8], buf: &mut String) {
     hex::ToHex::write_hex_upper(&data, buf).unwrap();
 }
 
+pub fn redact_bytes(data_length: usize, buf: &mut String) {
+    for i in 0..data_length {
+        buf.push('?');
+    }
+}
+
 #[inline]
 pub fn push_start(name: &str, buf: &mut String) {
     if !buf.is_empty() {
@@ -348,7 +357,11 @@ impl PbPrint for String {
             return;
         }
         push_field_start(name, buf);
-        escape(self.as_bytes(), buf);
+        if REDACT_BYTES.load(Ordering::Relaxed) {
+            redact_bytes(self.as_bytes().len(), buf);
+        } else {
+            hex_escape(self.as_bytes(), buf);
+        }
     }
 }
 
@@ -359,7 +372,11 @@ impl PbPrint for Vec<u8> {
             return;
         }
         push_field_start(name, buf);
-        hex_escape(self, buf);
+        if REDACT_BYTES.load(Ordering::Relaxed) {
+            redact_bytes(self.len(), buf);
+        } else {
+            hex_escape(self, buf);
+        }
     }
 }
 
