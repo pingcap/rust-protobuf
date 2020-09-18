@@ -5,6 +5,9 @@ use std::fmt;
 use std::fmt::Write as _;
 use std::io::Read;
 use std::io::Write;
+use std::sync::atomic::Ordering;
+
+use atomic_flags::REDACT_BYTES;
 
 #[cfg(feature = "bytes")]
 use bytes::Bytes;
@@ -307,6 +310,10 @@ pub fn hex_escape(data: &[u8], buf: &mut String) {
     hex::ToHex::write_hex_upper(&data, buf).unwrap();
 }
 
+pub fn redact_bytes(data: &[u8], buf: &mut String) {
+    buf.push('?')
+}
+
 #[inline]
 pub fn push_start(name: &str, buf: &mut String) {
     if !buf.is_empty() {
@@ -359,7 +366,11 @@ impl PbPrint for Vec<u8> {
             return;
         }
         push_field_start(name, buf);
-        hex_escape(self, buf);
+        if REDACT_BYTES.load(Ordering::Relaxed) {
+            redact_bytes(self, buf);
+        } else {
+            hex_escape(self, buf);
+        }
     }
 }
 
@@ -474,4 +485,34 @@ macro_rules! debug_to_pb_print {
             }
         }
     };
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use crate::atomic_flags::set_redact_bytes;
+
+    #[test]
+    fn test_redact_bytes() {
+        let mut buf = String::new();
+        redact_bytes("23333333".as_bytes(), &mut buf);
+        assert_eq!(buf, "?");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_redact_PbPrint() {
+        // This test is intentionally ignored because
+        // changing `REDACT_BYTES` globally may cause other
+        // tests to fail. You may run this test manually
+        // to verify the result.
+
+        set_redact_bytes(true);
+        let mut buf = String::new();
+        let src_str = b"23332333".to_vec();
+        PbPrint::fmt(&src_str, "test", &mut buf);
+        assert_eq!(buf, "test: ?");
+        set_redact_bytes(false);
+    }
 }
