@@ -492,3 +492,32 @@ macro_rules! debug_to_pb_print {
         }
     };
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn test_redact_bytes() {
+        let mut buf = String::new();
+        redact_bytes(10, &mut buf);
+        assert_eq!(buf, "??????????");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_redact_PbPrint() {
+        // This test is intentionally ignored because
+        // changing `REDACT_BYTES` globally may cause other
+        // tests to fail. You may run this test manually
+        // to verify the result.
+
+        REDACT_BYTES.store(true, Ordering::Relaxed);
+        let mut buf = String::new();
+        let src_str = b"23332333".to_vec();
+        PbPrint::fmt(&src_str, "test", &mut buf);
+        assert_eq!(buf, "test: ????????");
+        REDACT_BYTES.store(false, Ordering::Relaxed);
+    }
+}
