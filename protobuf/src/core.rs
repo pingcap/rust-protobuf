@@ -491,6 +491,7 @@ macro_rules! debug_to_pb_print {
 mod test {
 
     use super::*;
+    use crate::atomic_flags::set_redact_bytes;
 
     #[test]
     fn test_redact_bytes() {
@@ -507,11 +508,11 @@ mod test {
         // tests to fail. You may run this test manually
         // to verify the result.
 
-        REDACT_BYTES.store(true, Ordering::Relaxed);
+        set_redact_bytes(true);
         let mut buf = String::new();
         let src_str = b"23332333".to_vec();
         PbPrint::fmt(&src_str, "test", &mut buf);
         assert_eq!(buf, "test: ?");
-        REDACT_BYTES.store(false, Ordering::Relaxed);
+        set_redact_bytes(false);
     }
 }
