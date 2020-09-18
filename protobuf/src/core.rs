@@ -310,10 +310,8 @@ pub fn hex_escape(data: &[u8], buf: &mut String) {
     hex::ToHex::write_hex_upper(&data, buf).unwrap();
 }
 
-pub fn redact_bytes(data_length: usize, buf: &mut String) {
-    for i in 0..data_length {
-        buf.push('?');
-    }
+pub fn redact_bytes(data: &[u8], buf: &mut String) {
+    buf.push('?')
 }
 
 #[inline]
@@ -357,11 +355,7 @@ impl PbPrint for String {
             return;
         }
         push_field_start(name, buf);
-        if REDACT_BYTES.load(Ordering::Relaxed) {
-            redact_bytes(self.as_bytes().len(), buf);
-        } else {
-            hex_escape(self.as_bytes(), buf);
-        }
+        escape(self.as_bytes(), buf);
     }
 }
 
@@ -373,7 +367,7 @@ impl PbPrint for Vec<u8> {
         }
         push_field_start(name, buf);
         if REDACT_BYTES.load(Ordering::Relaxed) {
-            redact_bytes(self.len(), buf);
+            redact_bytes(self, buf);
         } else {
             hex_escape(self, buf);
         }
@@ -501,8 +495,8 @@ mod test {
     #[test]
     fn test_redact_bytes() {
         let mut buf = String::new();
-        redact_bytes(10, &mut buf);
-        assert_eq!(buf, "??????????");
+        redact_bytes("23333333".as_bytes(), &mut buf);
+        assert_eq!(buf, "?");
     }
 
     #[test]
@@ -517,7 +511,7 @@ mod test {
         let mut buf = String::new();
         let src_str = b"23332333".to_vec();
         PbPrint::fmt(&src_str, "test", &mut buf);
-        assert_eq!(buf, "test: ????????");
+        assert_eq!(buf, "test: ?");
         REDACT_BYTES.store(false, Ordering::Relaxed);
     }
 }
