@@ -15,8 +15,8 @@ bench = false
 
 [dependencies]
 protoc = { path = "../protoc", version = "=2.8.0" }
-protobuf = { package = "nrc-protobuf", path = "../protobuf", version = "=2.8.0" }
-protobuf-codegen = { package = "nrc-protobuf-codegen", path = "../protobuf-codegen", version = "=2.8.0" }
+protobuf = { package = "protobuf", path = "../protobuf", version = "=2.8.0" }
+protobuf-codegen = { package = "protobuf-codegen", path = "../protobuf-codegen", version = "=2.8.0" }
 tempfile = "3"
 
 [package.metadata.docs.rs]

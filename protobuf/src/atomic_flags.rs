@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 /// formatted as "?"
 pub(crate) static REDACT_BYTES: AtomicBool = AtomicBool::new(false);
 
+/// Set redact bytes.
 pub fn set_redact_bytes(redact_bytes: bool) {
     REDACT_BYTES.store(redact_bytes, Ordering::Relaxed);
 }

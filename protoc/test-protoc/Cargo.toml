@@ -10,10 +10,9 @@ doctest = false
 bench = false
 
 [dependencies]
-protobuf = { package = "nrc-protobuf", path = "../../protobuf" }
+protobuf = { package = "protobuf", path = "../../protobuf" }
 
 [features]
-default-features = []
 # Feature to avoid recompilation of protobuf
 with-bytes = ["protobuf/with-bytes"]
 with-serde = ["protobuf/with-serde"]
