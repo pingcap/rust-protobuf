@@ -95,9 +95,18 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
         }
     }
 
-    /// Write the message to the writer.
+    /// Write the message to the writer; an internal buffer is used.
     fn write_to_writer(&self, w: &mut Write) -> ProtobufResult<()> {
         w.with_coded_output_stream(|os| self.write_to(os))
+    }
+
+    /// Write the message to the writer.
+    fn write_to_writer_without_buffer(&self, w: &mut Write) -> ProtobufResult<()> {
+        // TODO: add a unbuffer version.
+        w.with_coded_output_stream(|os| {
+            os.use_internal_buffer = false;
+            self.write_to(os)
+        })
     }
 
     /// Write the message to bytes vec.
