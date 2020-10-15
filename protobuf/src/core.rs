@@ -56,12 +56,7 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
     /// Results in error if message is not fully initialized.
     fn write_to(&self, os: &mut CodedOutputStream) -> ProtobufResult<()> {
         self.check_initialized()?;
-
-        // cache sizes
-        self.compute_size();
-        // TODO: reserve additional
         self.write_to_with_cached_sizes(os)?;
-
         Ok(())
     }
 
@@ -71,9 +66,6 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
         let size = self.compute_size();
         os.write_raw_varint32(size)?;
         self.write_to_with_cached_sizes(os)?;
-
-        // TODO: assert we've written same number of bytes as computed
-
         Ok(())
     }
 
@@ -110,6 +102,10 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
 
     /// Write the message to bytes vec.
     fn write_to_vec(&self, v: &mut Vec<u8>) -> ProtobufResult<()> {
+        let size = self.compute_size() as usize;
+        if v.capacity() - v.len() < size {
+            v.reserve(size - v.len());
+        }
         v.with_coded_output_stream(|os| self.write_to(os))
     }
 
