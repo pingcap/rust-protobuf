@@ -19,7 +19,7 @@ A minor fork of https://github.com/stepancheg/rust-protobuf/
 bench = false
 
 [dependencies]
-protobuf = { package = "protobuf", version = "=2.8.0" }
+protobuf = { package = "protobuf", version = "=2.8.0", path = "../protobuf" }
 heck = "0.3"
 
 [[bin]]
