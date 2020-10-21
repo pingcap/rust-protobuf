@@ -102,7 +102,6 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
 
     /// Write the message to the writer.
     fn write_to_writer_without_buffer(&self, w: &mut Write) -> ProtobufResult<()> {
-        // TODO: add a unbuffer version.
         w.with_coded_output_stream(|os| {
             os.use_internal_buffer = false;
             self.write_to(os)
@@ -113,7 +112,7 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
     fn write_to_vec(&self, v: &mut Vec<u8>) -> ProtobufResult<()> {
         let size = self.compute_size() as usize;
         if v.capacity() - v.len() < size {
-            v.reserve(size - v.len());
+            v.reserve(size);
         }
         v.with_coded_output_stream(|os| self.write_to(os))
     }
