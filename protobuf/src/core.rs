@@ -374,6 +374,22 @@ impl PbPrint for Vec<u8> {
     }
 }
 
+#[cfg(feature = "bytes")]
+impl PbPrint for bytes::Bytes {
+    #[inline]
+    fn fmt(&self, name: &str, buf: &mut String) {
+        if self.is_empty() {
+            return;
+        }
+        push_field_start(name, buf);
+        if REDACT_BYTES.load(Ordering::Relaxed) {
+            redact_bytes(self.as_ref(), buf);
+        } else {
+            hex_escape(self.as_ref(), buf);
+        }
+    }
+}
+
 impl<T: PbPrint> PbPrint for Vec<T> {
     #[inline]
     fn fmt(&self, name: &str, buf: &mut String) {
