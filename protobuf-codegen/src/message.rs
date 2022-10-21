@@ -405,7 +405,7 @@ impl<'a> MessageGen<'a> {
         let oneofs = self.oneofs();
         w.impl_for_block("::protobuf::PbPrint", &self.type_name, |w| {
             w.allow(&["unused_variables"]);
-            w.def_fn("fmt(&self, name: &str, buf: &mut String)", |w| {
+            w.def_fn("fmt(&self, name: &str, buf: &mut ::std::string::String)", |w| {
                 if normal_fields.is_empty() && oneofs.is_empty() {
                     return;
                 }
@@ -433,7 +433,7 @@ impl<'a> MessageGen<'a> {
                         w.write_line("Ok(())");
                         return;
                     }
-                    w.write_line("let mut s = String::new();");
+                    w.write_line("let mut s = ::std::string::String::new();");
                     for field in &normal_fields {
                         w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);", field.rust_name, field.rust_name));
                     }

@@ -138,7 +138,7 @@ impl<'a> EnumGen<'a> {
 
     fn write_impl_show(&self, w: &mut CodeWriter) {
         w.impl_for_block("::protobuf::PbPrint", &self.type_name, |w| {
-            w.def_fn("fmt(&self, name: &str, buf: &mut String)", |w| {
+            w.def_fn("fmt(&self, name: &str, buf: &mut ::std::string::String)", |w| {
                 w.write_line("use std::fmt::Write;");
                 w.write_line(&format!("if *self == {}::default() {{", self.type_name));
                 w.write_line("    return;");
