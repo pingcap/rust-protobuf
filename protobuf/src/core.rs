@@ -419,6 +419,13 @@ impl<K: PbPrint, V: PbPrint, S> PbPrint for HashMap<K, V, S> {
     }
 }
 
+impl<T: PbPrint> PbPrint for Box<T> {
+    #[inline]
+    fn fmt(&self, name: &str, buf: &mut String) {
+        self.as_ref().fmt(name, buf)
+    }
+}
+
 macro_rules! print_number {
     ($t:ty, $zero:expr) => {
         impl PbPrint for $t {
