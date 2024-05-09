@@ -1,6 +1,8 @@
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
 
+use crate::customize::CustomizeCallback;
+
 use super::code_writer::*;
 use super::customize::customize_from_rustproto_for_message;
 use super::customize::Customize;
@@ -20,6 +22,7 @@ pub struct MessageGen<'a> {
     pub fields: Vec<FieldGen<'a>>,
     pub lite_runtime: bool,
     customize: Customize,
+    customize_callback: &'a dyn CustomizeCallback,
 }
 
 impl<'a> MessageGen<'a> {
@@ -27,6 +30,7 @@ impl<'a> MessageGen<'a> {
         message: &'a MessageWithScope<'a>,
         root_scope: &'a RootScope<'a>,
         customize: &Customize,
+        customize_callback: &'a dyn CustomizeCallback,
     ) -> MessageGen<'a> {
         let mut customize = customize.clone();
         customize.update_with(&customize_from_rustproto_for_message(
@@ -36,7 +40,7 @@ impl<'a> MessageGen<'a> {
         let fields: Vec<_> = message
             .fields()
             .into_iter()
-            .map(|field| FieldGen::parse(field, root_scope, &customize))
+            .map(|field| FieldGen::parse(field, root_scope, &customize, customize_callback))
             .collect();
         let lite_runtime = customize.lite_runtime.unwrap_or_else(|| {
             message
@@ -45,6 +49,7 @@ impl<'a> MessageGen<'a> {
                 .get_optimize_for()
                 == FileOptions_OptimizeMode::LITE_RUNTIME
         });
+        customize.update_from_callback(&customize_callback.message(message.message));
         MessageGen {
             message: message,
             root_scope: root_scope,
@@ -52,6 +57,7 @@ impl<'a> MessageGen<'a> {
             fields: fields,
             lite_runtime,
             customize,
+            customize_callback,
         }
     }
 
@@ -63,7 +69,7 @@ impl<'a> MessageGen<'a> {
         self.message
             .oneofs()
             .into_iter()
-            .map(|oneof| OneofGen::parse(self, oneof, &self.customize))
+            .map(|oneof| OneofGen::parse(self, oneof, &self.customize, self.customize_callback))
             .collect()
     }
 
@@ -298,7 +304,7 @@ impl<'a> MessageGen<'a> {
                             w.write_line(&format!("let mut fields = ::std::vec::Vec::new();"));
                         }
                         for field in fields {
-                            self.write_descriptor_field("fields", field, w);;
+                            self.write_descriptor_field("fields", field, w);
                         }
                         w.write_line(&format!(
                             "::protobuf::reflect::MessageDescriptor::new::<{}>(",
@@ -468,6 +474,7 @@ impl<'a> MessageGen<'a> {
         let derive = vec!["PartialEq", "Clone", "Default"];
         w.derive(&derive);
         serde::write_serde_attr(w, &self.customize, "derive(Serialize, Deserialize)");
+        crate::customize::write_customize_callback(w, &self.customize);
         w.pub_struct(&self.type_name, |w| {
             if !self.fields_except_oneof().is_empty() {
                 w.comment("message fields");
@@ -490,6 +497,7 @@ impl<'a> MessageGen<'a> {
                                 FieldKind::Oneof(..) => unreachable!(),
                             }
                         };
+                        field.write_customize_callback(w);
                         w.field_decl_vis(
                             vis,
                             &field.rust_name,
@@ -514,11 +522,19 @@ impl<'a> MessageGen<'a> {
             }
             w.comment("special fields");
             serde::write_serde_attr(w, &self.customize, "serde(skip)");
+            let mut customize_special = self.customize.clone();
+            customize_special.update_from_callback(
+                &self
+                    .customize_callback
+                    .special_field(self.message.message, "special_fields"),
+            );
+            crate::customize::write_customize_callback(w, &customize_special);
             w.pub_field_decl(
                 "unknown_fields",
                 &format!("{}::UnknownFields", protobuf_crate_path(&self.customize)),
             );
             serde::write_serde_attr(w, &self.customize, "serde(skip)");
+            crate::customize::write_customize_callback(w, &customize_special);
             w.pub_field_decl(
                 "cached_size",
                 &format!("{}::CachedSize", protobuf_crate_path(&self.customize)),
@@ -572,14 +588,27 @@ impl<'a> MessageGen<'a> {
             // ignore map entries, because they are not used in map fields
             if nested.map_entry().is_none() {
                 w.write_line("");
-                MessageGen::new(nested, self.root_scope, &self.customize).write(w);
+                MessageGen::new(
+                    nested,
+                    self.root_scope,
+                    &self.customize,
+                    self.customize_callback,
+                )
+                .write(w);
             }
         }
 
         for enum_type in &self.message.to_scope().get_enums() {
             w.write_line("");
             let current_file = self.message.get_scope().get_file_descriptor();
-            EnumGen::new(enum_type, current_file, &self.customize, self.root_scope).write(w);
+            EnumGen::new(
+                enum_type,
+                current_file,
+                &self.customize,
+                self.customize_callback,
+                self.root_scope,
+            )
+            .write(w);
         }
     }
 }
