@@ -7,7 +7,10 @@ use std::io::Read;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 
-use atomic_flags::REDACT_BYTES;
+use atomic_flags::RedactLevel;
+use atomic_flags::DEFAULT_REDACT_MARKER_HEAD;
+use atomic_flags::DEFAULT_REDACT_MARKER_TAIL;
+use atomic_flags::REDACT_LEVEL;
 
 #[cfg(feature = "bytes")]
 use bytes::Bytes;
@@ -314,6 +317,12 @@ pub fn redact_bytes(data: &[u8], buf: &mut String) {
     buf.push('?')
 }
 
+pub fn redact_bytes_with_marker(data: &[u8], buf: &mut String) {
+    buf.push_str(DEFAULT_REDACT_MARKER_HEAD);
+    hex_escape(data, buf);
+    buf.push_str(DEFAULT_REDACT_MARKER_TAIL);
+}
+
 #[inline]
 pub fn push_start(name: &str, buf: &mut String) {
     if !buf.is_empty() {
@@ -366,10 +375,10 @@ impl PbPrint for Vec<u8> {
             return;
         }
         push_field_start(name, buf);
-        if REDACT_BYTES.load(Ordering::Relaxed) {
-            redact_bytes(self, buf);
-        } else {
-            hex_escape(self, buf);
+        match REDACT_LEVEL.load(Ordering::Relaxed) {
+            RedactLevel::On => redact_bytes(self, buf),
+            RedactLevel::Marker => redact_bytes_with_marker(self, buf),
+            _ => hex_escape(self, buf),
         }
     }
 }
@@ -382,10 +391,10 @@ impl PbPrint for bytes::Bytes {
             return;
         }
         push_field_start(name, buf);
-        if REDACT_BYTES.load(Ordering::Relaxed) {
-            redact_bytes(self.as_ref(), buf);
-        } else {
-            hex_escape(self.as_ref(), buf);
+        match REDACT_LEVEL.load(Ordering::Relaxed) {
+            RedactLevel::On => redact_bytes(self, buf),
+            RedactLevel::Marker => redact_bytes_with_marker(self, buf),
+            _ => hex_escape(self, buf),
         }
     }
 }
@@ -514,28 +523,44 @@ macro_rules! debug_to_pb_print {
 mod test {
 
     use super::*;
-    use crate::atomic_flags::set_redact_bytes;
+    use crate::atomic_flags::{
+        set_redact_level, DEFAULT_REDACT_MARKER_HEAD, DEFAULT_REDACT_MARKER_TAIL,
+    };
 
     #[test]
     fn test_redact_bytes() {
         let mut buf = String::new();
         redact_bytes("23333333".as_bytes(), &mut buf);
         assert_eq!(buf, "?");
+        buf.clear();
+        redact_bytes_with_marker("data".as_bytes(), &mut buf);
+        assert!(buf.starts_with(DEFAULT_REDACT_MARKER_HEAD));
+        assert!(buf.ends_with(DEFAULT_REDACT_MARKER_TAIL));
     }
 
     #[test]
     #[ignore]
     fn test_redact_PbPrint() {
         // This test is intentionally ignored because
-        // changing `REDACT_BYTES` globally may cause other
+        // changing `REDACT_LEVEL` globally may cause other
         // tests to fail. You may run this test manually
         // to verify the result.
 
-        set_redact_bytes(true);
+        set_redact_level(RedactLevel::On);
         let mut buf = String::new();
         let src_str = b"23332333".to_vec();
         PbPrint::fmt(&src_str, "test", &mut buf);
         assert_eq!(buf, "test: ?");
-        set_redact_bytes(false);
+
+        set_redact_level(RedactLevel::Off);
+        buf.clear();
+        PbPrint::fmt(&src_str, "test", &mut buf);
+        assert!(!buf.contains("?"));
+
+        set_redact_level(RedactLevel::Marker);
+        buf.clear();
+        PbPrint::fmt(&src_str, "test", &mut buf);
+        assert!(buf.contains(DEFAULT_REDACT_MARKER_HEAD));
+        assert!(buf.contains(DEFAULT_REDACT_MARKER_TAIL));
     }
 }
