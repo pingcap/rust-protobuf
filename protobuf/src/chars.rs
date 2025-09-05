@@ -5,6 +5,7 @@ use std::str;
 use bytes::Bytes;
 
 use clear::Clear;
+use crate::core::PbPrint;
 
 /// Thin wrapper around `Bytes` which guarantees that bytes are valid UTF-8 string.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -77,6 +78,14 @@ impl fmt::Debug for Chars {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl PbPrint for Chars {
+    #[inline]
+    fn fmt(&self, name: &str, buf: &mut String) {
+        self.0.fmt(name, buf);
     }
 }
 
