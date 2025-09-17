@@ -80,6 +80,14 @@ impl fmt::Debug for Chars {
     }
 }
 
+#[cfg(feature = "bytes")]
+impl ::core::PbPrint for Chars {
+    #[inline]
+    fn fmt(&self, name: &str, buf: &mut String) {
+        self.0.fmt(name, buf);
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::Chars;
