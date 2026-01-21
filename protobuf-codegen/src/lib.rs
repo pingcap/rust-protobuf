@@ -1,5 +1,5 @@
-extern crate protobuf;
 extern crate heck;
+extern crate protobuf;
 
 use std::collections::hash_map::HashMap;
 use std::fmt::Write as FmtWrite;
@@ -8,6 +8,7 @@ use std::io;
 use std::io::Write;
 use std::path::Path;
 
+use customize::CustomizeCallbackDefault;
 use protobuf::compiler_plugin;
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
@@ -29,7 +30,7 @@ mod serde;
 mod well_known_types;
 
 use customize::customize_from_rustproto_for_file;
-pub use customize::Customize;
+pub use customize::{Customize, CustomizeCallback};
 
 pub mod code_writer;
 
@@ -126,6 +127,7 @@ fn gen_file(
     _files_map: &HashMap<&str, &FileDescriptorProto>,
     root_scope: &RootScope,
     customize: &Customize,
+    customize_callback: &dyn CustomizeCallback,
 ) -> Option<compiler_plugin::GenResult> {
     // TODO: use it
     let mut customize = customize.clone();
@@ -166,12 +168,12 @@ fn gen_file(
             // ignore map entries, because they are not used in map fields
             if message.map_entry().is_none() {
                 w.write_line("");
-                MessageGen::new(message, &root_scope, &customize).write(&mut w);
+                MessageGen::new(message, &root_scope, &customize, customize_callback).write(&mut w);
             }
         }
         for enum_type in &scope.get_enums() {
             w.write_line("");
-            EnumGen::new(enum_type, file, &customize, root_scope).write(&mut w);
+            EnumGen::new(enum_type, file, &customize, customize_callback, root_scope).write(&mut w);
         }
 
         write_extensions(file, &root_scope, &mut w, &customize);
@@ -196,6 +198,20 @@ pub fn gen(
     files_to_generate: &[String],
     customize: &Customize,
 ) -> Vec<compiler_plugin::GenResult> {
+    gen_with_callback(
+        file_descriptors,
+        files_to_generate,
+        customize,
+        &CustomizeCallbackDefault,
+    )
+}
+
+pub fn gen_with_callback(
+    file_descriptors: &[FileDescriptorProto],
+    files_to_generate: &[String],
+    customize: &Customize,
+    customize_callback: &dyn CustomizeCallback,
+) -> Vec<compiler_plugin::GenResult> {
     let root_scope = RootScope {
         file_descriptors: file_descriptors,
     };
@@ -211,7 +227,13 @@ pub fn gen(
             "file not found in file descriptors: {:?}, files: {:?}",
             file_name, all_file_names
         ));
-        results.extend(gen_file(file, &files_map, &root_scope, customize));
+        results.extend(gen_file(
+            file,
+            &files_map,
+            &root_scope,
+            customize,
+            customize_callback,
+        ));
     }
     results
 }
@@ -222,7 +244,28 @@ pub fn gen_and_write(
     out_dir: &Path,
     customize: &Customize,
 ) -> io::Result<()> {
-    let results = gen(file_descriptors, files_to_generate, customize);
+    gen_and_write_with_callback(
+        file_descriptors,
+        files_to_generate,
+        out_dir,
+        customize,
+        &CustomizeCallbackDefault,
+    )
+}
+
+pub fn gen_and_write_with_callback(
+    file_descriptors: &[FileDescriptorProto],
+    files_to_generate: &[String],
+    out_dir: &Path,
+    customize: &Customize,
+    customize_callback: &dyn CustomizeCallback,
+) -> io::Result<()> {
+    let results = gen_with_callback(
+        file_descriptors,
+        files_to_generate,
+        customize,
+        customize_callback,
+    );
 
     for r in &results {
         let mut file_path = out_dir.to_owned();

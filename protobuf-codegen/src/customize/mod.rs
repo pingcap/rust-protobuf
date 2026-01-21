@@ -3,9 +3,16 @@ use protobuf::descriptor::FileOptions;
 use protobuf::descriptor::MessageOptions;
 use protobuf::rustproto;
 
+mod customize_callback;
+pub use self::customize_callback::write_customize_callback;
+pub use self::customize_callback::CustomizeCallback;
+pub(crate) use self::customize_callback::CustomizeCallbackDefault;
+
 /// Specifies style of generated code.
 #[derive(Default, Debug, Clone)]
 pub struct Customize {
+    /// Code to insert before the element in the generated file.
+    pub before: Option<String>,
     /// Make oneof enum public.
     pub expose_oneof: Option<bool>,
     /// When true all fields are public, and accessors are not generated
@@ -42,8 +49,24 @@ pub enum CustomizeParseParameterError {
 pub type CustomizeParseParameterResult<T> = Result<T, CustomizeParseParameterError>;
 
 impl Customize {
+    /// Insert code before the element in the generated file
+    /// (e. g. serde annotations, see
+    /// [example here](https://github.com/stepancheg/rust-protobuf/tree/master/protobuf-examples/customize-serde)).
+    pub fn before(mut self, before: &str) -> Self {
+        self.before = Some(before.to_owned());
+        self
+    }
+
+    /// Update fields of self with fields defined in other customize
+    pub fn update_from_callback(&mut self, that: &Customize) {
+        self.before = that.before.clone();
+    }
+
     /// Update fields of self with fields defined in other customize
     pub fn update_with(&mut self, that: &Customize) {
+        if let Some(v) = &that.before {
+            self.before = Some(v.clone());
+        }
         if let Some(v) = that.expose_oneof {
             self.expose_oneof = Some(v);
         }
@@ -126,6 +149,7 @@ impl Customize {
 }
 
 pub fn customize_from_rustproto_for_message(source: &MessageOptions) -> Customize {
+    let before = None;
     let expose_oneof = rustproto::exts::expose_oneof.get(source);
     let expose_fields = rustproto::exts::expose_fields.get(source);
     let generate_accessors = rustproto::exts::generate_accessors.get(source);
@@ -136,6 +160,7 @@ pub fn customize_from_rustproto_for_message(source: &MessageOptions) -> Customiz
     let lite_runtime = None;
     let inside_protobuf = None;
     Customize {
+        before,
         expose_oneof,
         expose_fields,
         generate_accessors,
@@ -150,6 +175,7 @@ pub fn customize_from_rustproto_for_message(source: &MessageOptions) -> Customiz
 }
 
 pub fn customize_from_rustproto_for_field(source: &FieldOptions) -> Customize {
+    let before = None;
     let expose_oneof = None;
     let expose_fields = rustproto::exts::expose_fields_field.get(source);
     let generate_accessors = rustproto::exts::generate_accessors_field.get(source);
@@ -161,6 +187,7 @@ pub fn customize_from_rustproto_for_field(source: &FieldOptions) -> Customize {
     let lite_runtime = None;
     let inside_protobuf = None;
     Customize {
+        before,
         expose_oneof,
         expose_fields,
         generate_accessors,
@@ -175,6 +202,7 @@ pub fn customize_from_rustproto_for_field(source: &FieldOptions) -> Customize {
 }
 
 pub fn customize_from_rustproto_for_file(source: &FileOptions) -> Customize {
+    let before = None;
     let expose_oneof = rustproto::exts::expose_oneof_all.get(source);
     let expose_fields = rustproto::exts::expose_fields_all.get(source);
     let generate_accessors = rustproto::exts::generate_accessors_all.get(source);
@@ -185,6 +213,7 @@ pub fn customize_from_rustproto_for_file(source: &FileOptions) -> Customize {
     let lite_runtime = rustproto::exts::lite_runtime_all.get(source);
     let inside_protobuf = None;
     Customize {
+        before,
         expose_oneof,
         expose_fields,
         generate_accessors,

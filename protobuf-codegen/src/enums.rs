@@ -3,6 +3,8 @@ use std::collections::HashSet;
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
 
+use crate::customize::CustomizeCallback;
+
 use super::code_writer::*;
 use super::customize::Customize;
 use rust_types_values::type_name_to_rust_relative;
@@ -53,6 +55,7 @@ impl<'a> EnumGen<'a> {
         enum_with_scope: &'a EnumWithScope<'a>,
         current_file: &FileDescriptorProto,
         customize: &Customize,
+        customize_callback: &'a dyn CustomizeCallback,
         root_scope: &RootScope,
     ) -> EnumGen<'a> {
         let rust_name = if enum_with_scope.get_scope().get_file_descriptor().get_name()
@@ -76,12 +79,14 @@ impl<'a> EnumGen<'a> {
                 .get_optimize_for()
                 == FileOptions_OptimizeMode::LITE_RUNTIME
         });
+        let mut customize = customize.clone();
+        customize.update_from_callback(&customize_callback.enumeration(enum_with_scope.en));
 
         EnumGen {
             enum_with_scope,
             type_name: rust_name,
             lite_runtime: lite_runtime,
-            customize: customize.clone(),
+            customize,
         }
     }
 
@@ -164,6 +169,7 @@ impl<'a> EnumGen<'a> {
         }
         w.derive(&derive);
         serde::write_serde_attr(w, &self.customize, "derive(Serialize, Deserialize)");
+        crate::customize::write_customize_callback(w, &self.customize);
         let ref type_name = self.type_name;
         w.expr_block(&format!("pub enum {}", type_name), |w| {
             for value in self.values_all() {

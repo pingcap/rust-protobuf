@@ -13,6 +13,8 @@ use serde;
 use std::collections::HashSet;
 use Customize;
 
+use crate::customize::CustomizeCallback;
+
 // oneof one { ... }
 #[derive(Clone)]
 pub struct OneofField {
@@ -135,8 +137,11 @@ impl<'a> OneofGen<'a> {
         message: &'a MessageGen,
         oneof: OneofWithContext<'a>,
         customize: &Customize,
+        customize_callback: &'a dyn CustomizeCallback,
     ) -> OneofGen<'a> {
         let rust_name = oneof.rust_name();
+        let mut customize = customize.clone();
+        customize.update_from_callback(&customize_callback.oneof(oneof.oneof));
         OneofGen {
             message: message,
             oneof: oneof,
@@ -197,6 +202,7 @@ impl<'a> OneofGen<'a> {
         let derive = vec!["Clone", "PartialEq"];
         w.derive(&derive);
         serde::write_serde_attr(w, &self.customize, "derive(Serialize, Deserialize)");
+        crate::customize::write_customize_callback(w, &self.customize);
         w.pub_enum(&self.type_name.to_code(&self.customize), |w| {
             for variant in self.variants_except_group() {
                 w.write_line(&format!(

@@ -5,6 +5,8 @@ use protobuf::rust;
 use protobuf::text_format;
 use protobuf::wire_format;
 
+use crate::customize::CustomizeCallback;
+
 use super::code_writer::CodeWriter;
 use super::enums::*;
 use super::rust_types_values::*;
@@ -290,6 +292,7 @@ fn field_elem(
     root_scope: &RootScope,
     parse_map: bool,
     customize: &Customize,
+    customize_callback: &dyn CustomizeCallback,
 ) -> (FieldElem, Option<EnumValueGen>) {
     if field.field.get_field_type() == FieldDescriptorProto_Type::TYPE_GROUP {
         (FieldElem::Group, None)
@@ -316,8 +319,8 @@ fn field_elem(
                     (parse_map, message_with_scope.map_entry())
                 {
                     Some(Box::new(EntryKeyValue(
-                        field_elem(&key, root_scope, false, customize).0,
-                        field_elem(&value, root_scope, false, customize).0,
+                        field_elem(&key, root_scope, false, customize, customize_callback).0,
+                        field_elem(&value, root_scope, false, customize, customize_callback).0,
                     )))
                 } else {
                     None
@@ -335,6 +338,7 @@ fn field_elem(
                     &enum_with_scope,
                     field.message.get_scope().get_file_descriptor(),
                     customize,
+                    customize_callback,
                     root_scope,
                 );
                 let ev = if field.field.has_default_value() {
@@ -426,13 +430,16 @@ impl<'a> FieldGen<'a> {
         field: FieldWithContext<'a>,
         root_scope: &'a RootScope<'a>,
         customize: &Customize,
+        customize_callback: &'a dyn CustomizeCallback,
     ) -> FieldGen<'a> {
         let mut customize = customize.clone();
         customize.update_with(&customize_from_rustproto_for_field(
             &field.field.get_options(),
         ));
+        customize.update_from_callback(&customize_callback.field(field.field));
 
-        let (elem, enum_default_value) = field_elem(&field, root_scope, true, &customize);
+        let (elem, enum_default_value) =
+            field_elem(&field, root_scope, true, &customize, customize_callback);
 
         let generate_accessors = customize.generate_accessors.unwrap_or(true);
 
@@ -484,6 +491,10 @@ impl<'a> FieldGen<'a> {
             generate_accessors: generate_accessors,
             customize: customize.clone(),
         }
+    }
+
+    pub(crate) fn write_customize_callback(&self, w: &mut CodeWriter) {
+        crate::customize::write_customize_callback(w, &self.customize);
     }
 
     fn tag_size(&self) -> u32 {
