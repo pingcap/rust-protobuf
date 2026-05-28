@@ -1363,7 +1363,17 @@ impl<'a> CodedOutputStream<'a> {
 
     /// Write unknown fields
     pub fn write_unknown_fields(&mut self, fields: &UnknownFields) -> ProtobufResult<()> {
-        for (number, values) in fields {
+        // `UnknownFields` is backed by a `HashMap`, whose iteration
+        // order is hash-randomized. Sort by field number before writing
+        // so the encoded bytes are stable across runs — required for
+        // reproducible builds when the encoded `FileDescriptorProto` is
+        // embedded as a `static &[u8]` (e.g. by `protobuf-codegen`'s
+        // `file.write_to_bytes()`), and a sensible default in any case.
+        // Encoded size is order-independent, so `unknown_fields_size`
+        // does not need the same treatment.
+        let mut sorted: Vec<_> = fields.iter().collect();
+        sorted.sort_by_key(|&(n, _)| n);
+        for (number, values) in sorted {
             for value in values {
                 self.write_unknown(number, value)?;
             }
