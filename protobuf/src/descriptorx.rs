@@ -696,19 +696,21 @@ pub fn find_message_by_rust_name<'a>(
     fd: &'a FileDescriptorProto,
     rust_name: &str,
 ) -> MessageWithScope<'a> {
-    FileScope {
+    let messages = FileScope {
         file_descriptor: fd,
     }
-    .find_messages()
-    .into_iter()
-    .find(|m| {
-        if rust_name.starts_with('.') {
-            m.name_to_package() == rust_name[1..]
-        } else {
-            m.rust_name() == rust_name || m.legacy_rust_name() == rust_name
-        }
-    })
-    .unwrap()
+    .find_messages();
+    if rust_name.starts_with('.') {
+        messages.into_iter()
+            .find(|m| m.name_to_package() == rust_name[1..])
+            .unwrap()
+    } else {
+        // Prefer the default naming style across all descriptors before
+        // trying legacy names, which can collide with a default name.
+        messages.iter().find(|m| m.rust_name() == rust_name)
+            .or_else(|| messages.iter().find(|m| m.legacy_rust_name() == rust_name))
+            .unwrap().clone()
+    }
 }
 
 /// Find enum by rust type name
@@ -716,19 +718,19 @@ pub fn find_enum_by_rust_name<'a>(
     fd: &'a FileDescriptorProto,
     rust_name: &str,
 ) -> EnumWithScope<'a> {
-    FileScope {
+    let enums = FileScope {
         file_descriptor: fd,
     }
-    .find_enums()
-    .into_iter()
-    .find(|e| {
-        if rust_name.starts_with('.') {
-            e.name_to_package() == rust_name[1..]
-        } else {
-            e.rust_name() == rust_name || e.legacy_rust_name() == rust_name
-        }
-    })
-    .unwrap()
+    .find_enums();
+    if rust_name.starts_with('.') {
+        enums.into_iter()
+            .find(|e| e.name_to_package() == rust_name[1..])
+            .unwrap()
+    } else {
+        enums.iter().find(|e| e.rust_name() == rust_name)
+            .or_else(|| enums.iter().find(|e| e.legacy_rust_name() == rust_name))
+            .unwrap().clone()
+    }
 }
 
 #[cfg(test)]

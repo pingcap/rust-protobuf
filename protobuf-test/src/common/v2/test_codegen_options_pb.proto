@@ -5,6 +5,12 @@ import "rustproto.proto";
 option (rustproto.prost_style_all) = true;
 option (rustproto.generate_pb_print_all) = true;
 
+message ABC { optional int32 first = 1; }
+message A_B_C { optional int32 second = 1; }
+
+enum XYZ { XYZ_FIRST = 0; }
+enum X_Y_Z { XYZ_SECOND = 0; }
+
 message option_test {
     enum inner_enum {
         FIRST_VALUE = 0;
