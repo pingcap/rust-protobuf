@@ -1,0 +1,6 @@
+syntax = "proto2";
+
+package option_legacy;
+
+message FooBar {}
+message Foo_Bar {}

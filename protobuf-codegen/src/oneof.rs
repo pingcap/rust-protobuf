@@ -91,14 +91,20 @@ impl<'a> OneofVariantGen<'a> {
         customize: Customize,
     ) -> OneofVariantGen<'a> {
         let mut field = field.clone();
-        field.rust_name = camel_case(&field.rust_name);
+        if customize.prost_style.unwrap_or(true) {
+            field.rust_name = camel_case(&field.rust_name);
+        }
         OneofVariantGen {
             oneof: oneof,
             variant: variant.clone(),
             path: format!(
                 "{}::{}",
                 oneof.type_name.to_code(&field.customize),
-                camel_case(&field.rust_name)
+                if customize.prost_style.unwrap_or(true) {
+                    camel_case(&field.rust_name)
+                } else {
+                    field.rust_name.clone()
+                }
             ),
             oneof_field: OneofField::parse(
                 variant.oneof,
@@ -183,18 +189,27 @@ impl<'a> OneofGen<'a> {
     fn write_impl_show(&self, w: &mut CodeWriter) {
         let type_name = self.type_name.to_code(&self.customize);
         w.impl_for_block("::protobuf::PbPrint", &type_name, |w| {
-            w.def_fn("fmt(&self, name: &str, buf: &mut ::std::string::String)", |w| {
-                w.write_line("match self {");
-                for variant in self.variants_except_group() {
-                    w.write_line(&format!("    {}::{}(v) => ::protobuf::PbPrint::fmt(v, name, buf),", type_name, variant.field.rust_name));
-                }
-                w.write_line("}");
-            })
+            w.def_fn(
+                "fmt(&self, name: &str, buf: &mut ::std::string::String)",
+                |w| {
+                    w.write_line("match self {");
+                    for variant in self.variants_except_group() {
+                        w.write_line(&format!(
+                            "    {}::{}(v) => ::protobuf::PbPrint::fmt(v, name, buf),",
+                            type_name, variant.field.rust_name
+                        ));
+                    }
+                    w.write_line("}");
+                },
+            )
         });
     }
 
     pub fn write_enum(&self, w: &mut CodeWriter) {
-        let derive = vec!["Clone", "PartialEq"];
+        let mut derive = vec!["Clone", "PartialEq"];
+        if !self.customize.generate_pb_print.unwrap_or(true) {
+            derive.push("Debug");
+        }
         w.derive(&derive);
         serde::write_serde_attr(w, &self.customize, "derive(Serialize, Deserialize)");
         w.pub_enum(&self.type_name.to_code(&self.customize), |w| {
@@ -207,6 +222,8 @@ impl<'a> OneofGen<'a> {
             }
         });
         w.write_line("");
-        self.write_impl_show(w);
+        if self.customize.generate_pb_print.unwrap_or(true) {
+            self.write_impl_show(w);
+        }
     }
 }

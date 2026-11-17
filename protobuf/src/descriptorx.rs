@@ -53,6 +53,7 @@ pub fn proto_path_to_rust_mod(path: &str) -> String {
 
 pub struct RootScope<'a> {
     pub file_descriptors: &'a [FileDescriptorProto],
+    pub prost_style: bool,
 }
 
 impl<'a> RootScope<'a> {
@@ -61,6 +62,9 @@ impl<'a> RootScope<'a> {
             .iter()
             .map(|fd| FileScope {
                 file_descriptor: fd,
+                prost_style: ::rustproto::exts::prost_style_all
+                    .get(fd.get_options())
+                    .unwrap_or(self.prost_style),
             })
             .collect()
     }
@@ -122,6 +126,7 @@ impl Syntax {
 #[derive(Clone)]
 pub struct FileScope<'a> {
     pub file_descriptor: &'a FileDescriptorProto,
+    pub prost_style: bool,
 }
 
 impl<'a> FileScope<'a> {
@@ -301,7 +306,9 @@ pub trait WithScope<'a> {
     // message or enum name
     fn get_name(&self) -> &'a str;
 
-    fn escape_prefix(&self) -> &'static str { "r#" }
+    fn escape_prefix(&self) -> &'static str {
+        "r#"
+    }
 
     fn name_to_package(&self) -> String {
         let mut r = self.get_scope().prefix();
@@ -342,6 +349,18 @@ pub trait WithScope<'a> {
         r
     }
 
+    fn legacy_rust_name(&self) -> String {
+        let mut name = self.get_scope().rust_prefix();
+        if name.is_empty() && rust::is_rust_keyword(self.get_name()) {
+            name.push_str(match self.escape_prefix() {
+                "r#" => "message_",
+                prefix => prefix,
+            });
+        }
+        name.push_str(self.get_name());
+        name
+    }
+
     // fully-qualified name of this type
     fn rust_fq_name(&self) -> String {
         format!(
@@ -368,7 +387,11 @@ impl<'a> WithScope<'a> for MessageWithScope<'a> {
     }
 
     fn rust_name(&self) -> String {
-        camel_case(&self.esc_rust_name())
+        if self.scope.file_scope.prost_style {
+            camel_case(&self.esc_rust_name())
+        } else {
+            self.legacy_rust_name()
+        }
     }
 }
 
@@ -454,20 +477,37 @@ impl<'a> EnumWithScope<'a> {
 
 pub trait EnumValueDescriptorEx {
     fn rust_name(&self) -> String;
+    fn rust_name_with_style(&self, prost_style: bool) -> String;
 }
 
 impl EnumValueDescriptorEx for EnumValueDescriptorProto {
     fn rust_name(&self) -> String {
+        self.rust_name_with_style(true)
+    }
+
+    fn rust_name_with_style(&self, prost_style: bool) -> String {
         let mut r = String::new();
         if rust::is_rust_keyword(self.get_name()) {
-            r.push_str("r#");
+            r.push_str(if prost_style { "r#" } else { "value_" });
         }
         r.push_str(self.get_name());
-        camel_case(&r)
+        if prost_style {
+            camel_case(&r)
+        } else {
+            r
+        }
     }
 }
 
 impl<'a> WithScope<'a> for EnumWithScope<'a> {
+    fn legacy_rust_name(&self) -> String {
+        let mut name = self.get_scope().rust_prefix();
+        if name.is_empty() && rust::is_rust_keyword(self.get_name()) {
+            name.push_str("enum_");
+        }
+        name.push_str(self.get_name());
+        name
+    }
     fn get_scope(&self) -> &Scope<'a> {
         &self.scope
     }
@@ -477,7 +517,11 @@ impl<'a> WithScope<'a> for EnumWithScope<'a> {
     }
 
     fn rust_name(&self) -> String {
-        camel_case(&self.esc_rust_name())
+        if self.scope.file_scope.prost_style {
+            camel_case(&self.esc_rust_name())
+        } else {
+            self.legacy_rust_name()
+        }
     }
 }
 
@@ -512,10 +556,22 @@ impl<'a> WithScope<'a> for MessageOrEnumWithScope<'a> {
 pub trait FieldDescriptorProtoExt {
     fn rust_name(&self) -> String;
     fn unesc_rust_name(&self) -> String;
+    fn rust_name_with_style(&self, prost_style: bool) -> String;
 }
 
 impl FieldDescriptorProtoExt for FieldDescriptorProto {
     fn rust_name(&self) -> String {
+        self.rust_name_with_style(true)
+    }
+
+    fn rust_name_with_style(&self, prost_style: bool) -> String {
+        if !prost_style {
+            return if rust::is_rust_keyword(self.get_name()) {
+                format!("field_{}", self.get_name())
+            } else {
+                self.get_name().to_string()
+            };
+        }
         snake_case(&if rust::is_rust_keyword(self.get_name()) {
             format!("r#{}", self.get_name())
         } else {
@@ -602,7 +658,11 @@ impl<'a> OneofWithContext<'a> {
     pub fn rust_name(&self) -> String {
         format!(
             "{}_oneof_{}",
-            self.message.unesc_rust_name(),
+            if self.message.scope.file_scope.prost_style {
+                self.message.unesc_rust_name()
+            } else {
+                self.message.rust_name()
+            },
             self.oneof.get_name()
         )
     }
@@ -628,10 +688,17 @@ pub fn find_message_by_rust_name<'a>(
 ) -> MessageWithScope<'a> {
     FileScope {
         file_descriptor: fd,
+        prost_style: true,
     }
     .find_messages()
     .into_iter()
-    .find(|m| m.rust_name() == rust_name)
+    .find(|m| {
+        if rust_name.starts_with('.') {
+            m.name_to_package() == rust_name[1..]
+        } else {
+            m.rust_name() == rust_name || m.legacy_rust_name() == rust_name
+        }
+    })
     .unwrap()
 }
 
@@ -642,10 +709,17 @@ pub fn find_enum_by_rust_name<'a>(
 ) -> EnumWithScope<'a> {
     FileScope {
         file_descriptor: fd,
+        prost_style: true,
     }
     .find_enums()
     .into_iter()
-    .find(|e| e.rust_name() == rust_name)
+    .find(|e| {
+        if rust_name.starts_with('.') {
+            e.name_to_package() == rust_name[1..]
+        } else {
+            e.rust_name() == rust_name || e.legacy_rust_name() == rust_name
+        }
+    })
     .unwrap()
 }
 

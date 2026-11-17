@@ -54,7 +54,7 @@ impl<'a> ExtGen<'a> {
         };
         let field_type = format!("::protobuf::ext::ExtField{}", suffix);
         w.pub_const(
-            &self.field.rust_name(),
+            &self.field.rust_name_with_style(self.customize.prost_style.unwrap_or(true)),
             &format!(
                 "{}<{}, {}>",
                 field_type,
