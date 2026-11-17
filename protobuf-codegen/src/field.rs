@@ -730,23 +730,41 @@ impl<'a> FieldGen<'a> {
         } else if self.proto_field.field.has_default_value() {
             let proto_default = self.proto_field.field.get_default_value();
             Some(match self.proto_type {
-                // For numeric types, contains the original text representation of the value
                 FieldDescriptorProto_Type::TYPE_DOUBLE | FieldDescriptorProto_Type::TYPE_FLOAT => {
                     self.defaut_value_from_proto_float()
                 }
                 FieldDescriptorProto_Type::TYPE_INT32
                 | FieldDescriptorProto_Type::TYPE_SINT32
-                | FieldDescriptorProto_Type::TYPE_SFIXED32 => format!("{}i32", proto_default),
+                | FieldDescriptorProto_Type::TYPE_SFIXED32 => format!(
+                    "{}i32",
+                    proto_default.parse::<i32>().expect("invalid int32 default")
+                ),
                 FieldDescriptorProto_Type::TYPE_UINT32
-                | FieldDescriptorProto_Type::TYPE_FIXED32 => format!("{}u32", proto_default),
+                | FieldDescriptorProto_Type::TYPE_FIXED32 => format!(
+                    "{}u32",
+                    proto_default
+                        .parse::<u32>()
+                        .expect("invalid uint32 default")
+                ),
                 FieldDescriptorProto_Type::TYPE_INT64
                 | FieldDescriptorProto_Type::TYPE_SINT64
-                | FieldDescriptorProto_Type::TYPE_SFIXED64 => format!("{}i64", proto_default),
+                | FieldDescriptorProto_Type::TYPE_SFIXED64 => format!(
+                    "{}i64",
+                    proto_default.parse::<i64>().expect("invalid int64 default")
+                ),
                 FieldDescriptorProto_Type::TYPE_UINT64
-                | FieldDescriptorProto_Type::TYPE_FIXED64 => format!("{}u64", proto_default),
+                | FieldDescriptorProto_Type::TYPE_FIXED64 => format!(
+                    "{}u64",
+                    proto_default
+                        .parse::<u64>()
+                        .expect("invalid uint64 default")
+                ),
 
                 // For booleans, "true" or "false"
-                FieldDescriptorProto_Type::TYPE_BOOL => format!("{}", proto_default),
+                FieldDescriptorProto_Type::TYPE_BOOL => format!(
+                    "{}",
+                    proto_default.parse::<bool>().expect("invalid bool default")
+                ),
                 // For strings, contains the default text contents (not escaped in any way)
                 FieldDescriptorProto_Type::TYPE_STRING => rust::quote_escape_str(proto_default),
                 // For bytes, contains the C escaped value.  All bytes >= 128 are escaped

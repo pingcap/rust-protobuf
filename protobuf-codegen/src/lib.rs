@@ -26,6 +26,7 @@ mod oneof;
 mod rust_name;
 mod rust_types_values;
 mod serde;
+mod validate;
 mod well_known_types;
 
 use customize::customize_from_rustproto_for_file;
@@ -167,7 +168,7 @@ fn gen_file(
         let mut w = CodeWriter::new(&mut v);
 
         w.write_generated_by("rust-protobuf", env!("CARGO_PKG_VERSION"));
-        w.write_line(&format!("//! Generated file from `{}`", file.get_name()));
+        w.write_line(&format!("//! Generated file from {:?}", file.get_name()));
 
         w.write_line("");
         w.write_line("use protobuf::Message as Message_imported_for_functions;");
@@ -217,6 +218,10 @@ pub fn gen(
     files_to_generate: &[String],
     customize: &Customize,
 ) -> Vec<compiler_plugin::GenResult> {
+    for file in file_descriptors {
+        validate::file(file)
+            .unwrap_or_else(|error| panic!("invalid protobuf descriptor: {}", error));
+    }
     let root_scope = CodegenRootScope {
         scope: RootScope { file_descriptors },
         default_prost_style: customize.prost_style.unwrap_or(true),
@@ -262,6 +267,95 @@ pub fn protoc_gen_rust_main() {
         let customize = Customize::parse_from_parameter(r.parameter).expect("parse options");
         gen(r.file_descriptors, r.files_to_generate, &customize)
     });
+}
+
+#[test]
+fn rejects_injected_numeric_and_boolean_defaults() {
+    use protobuf::descriptor::FieldDescriptorProto_Type::*;
+    for &typ in &[
+        TYPE_BOOL,
+        TYPE_INT32,
+        TYPE_SINT32,
+        TYPE_SFIXED32,
+        TYPE_UINT32,
+        TYPE_FIXED32,
+        TYPE_INT64,
+        TYPE_SINT64,
+        TYPE_SFIXED64,
+        TYPE_UINT64,
+        TYPE_FIXED64,
+    ] {
+        let mut file = FileDescriptorProto::new();
+        file.set_name("injection.proto".to_owned());
+        let mut message = DescriptorProto::new();
+        message.set_name("Test".to_owned());
+        let mut field = FieldDescriptorProto::new();
+        field.set_name("value".to_owned());
+        field.set_number(1);
+        field.set_field_type(typ);
+        field.set_default_value("{ panic!(\"injected\"); false }".to_owned());
+        message.mut_field().push(field);
+        file.mut_message_type().push(message);
+        assert!(::std::panic::catch_unwind(|| gen(
+            &[file],
+            &["injection.proto".to_owned()],
+            &Customize::default()
+        ))
+        .is_err());
+    }
+}
+
+#[test]
+fn escapes_newline_in_file_comment() {
+    let mut file = FileDescriptorProto::new();
+    let name = "bad\ncompile_error!(\"injected\");\n.proto";
+    file.set_name(name.to_owned());
+    let generated = gen(&[file], &[name.to_owned()], &Customize::default());
+    let code = ::std::str::from_utf8(&generated[0].content).unwrap();
+    assert!(!code.contains("\ncompile_error!"));
+    assert!(code.contains("bad\\ncompile_error!"));
+}
+
+#[test]
+fn valid_scalar_defaults_are_generated() {
+    use protobuf::descriptor::FieldDescriptorProto_Type::*;
+    let mut file = FileDescriptorProto::new();
+    file.set_name("defaults.proto".to_owned());
+    let mut message = DescriptorProto::new();
+    message.set_name("Test".to_owned());
+    for (index, &(typ, value)) in [
+        (TYPE_INT32, "-2147483648"),
+        (TYPE_UINT32, "4294967295"),
+        (TYPE_INT64, "-9223372036854775808"),
+        (TYPE_UINT64, "18446744073709551615"),
+        (TYPE_BOOL, "true"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let mut field = FieldDescriptorProto::new();
+        field.set_name(format!("field_{}", index));
+        field.set_number(index as i32 + 1);
+        field.set_field_type(typ);
+        field.set_default_value(value.to_owned());
+        message.mut_field().push(field);
+    }
+    file.mut_message_type().push(message);
+    let generated = gen(
+        &[file],
+        &["defaults.proto".to_owned()],
+        &Customize::default(),
+    );
+    let code = ::std::str::from_utf8(&generated[0].content).unwrap();
+    for value in &[
+        "-2147483648i32",
+        "4294967295u32",
+        "-9223372036854775808i64",
+        "18446744073709551615u64",
+        "unwrap_or(true)",
+    ] {
+        assert!(code.contains(value), "missing {}", value);
+    }
 }
 
 #[test]
