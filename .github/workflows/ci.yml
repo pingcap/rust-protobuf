@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [v2.8]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  workspace:
+    name: Workspace tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Build protoc plugin
+        run: cargo build -p protobuf-codegen --bin protoc-gen-rust
+      - name: Test workspace
+        run: cargo test --workspace
+
+  runtime:
+    name: Runtime (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            features: ""
+          - name: bytes
+            features: with-bytes
+          - name: serde
+            features: with-serde
+          - name: bytes and serde
+            features: with-bytes,with-serde
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test runtime
+        env:
+          PROTOBUF_FEATURES: ${{ matrix.features }}
+        run: cargo test -p protobuf --features "$PROTOBUF_FEATURES"
+
+  tooling:
+    name: Code generation and protoc tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Test tooling
+        run: cargo test -p protobuf-codegen -p protobuf-codegen-pure -p protoc -p protoc-rust

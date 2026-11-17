@@ -816,11 +816,16 @@ impl<'a> CodedInputStream<'a> {
 
     /// Read message, do not check if message is initialized
     pub fn merge_message<M: Message>(&mut self, message: &mut M) -> ProtobufResult<()> {
-        let len = self.read_raw_varint64()?;
-        let old_limit = self.push_limit(len)?;
-        message.merge_from(self)?;
-        self.pop_limit(old_limit);
-        Ok(())
+        self.incr_recursion()?;
+        let result = (|| {
+            let len = self.read_raw_varint64()?;
+            let old_limit = self.push_limit(len)?;
+            let result = message.merge_from(self);
+            self.pop_limit(old_limit);
+            result
+        })();
+        self.decr_recursion();
+        result
     }
 
     /// Read message
