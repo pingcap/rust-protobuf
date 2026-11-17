@@ -1,7 +1,9 @@
 use std::mem;
 use std::slice;
 
-/// Slice from `vec[vec.len()..vec.capacity()]`
+/// Slice from `vec[vec.len()..vec.capacity()]`.
+///
+/// The caller must ensure that all spare elements are initialized.
 pub unsafe fn remaining_capacity_as_slice_mut<A>(vec: &mut Vec<A>) -> &mut [A] {
     slice::from_raw_parts_mut(
         vec.as_mut_slice().as_mut_ptr().offset(vec.len() as isize),
@@ -24,6 +26,7 @@ mod test {
         v.push(11);
         v.push(12);
         unsafe {
+            std::ptr::write_bytes(v.as_mut_ptr().add(v.len()), 0, v.capacity() - v.len());
             {
                 let s = remaining_capacity_as_slice_mut(&mut v);
                 assert_eq!(2, s.len());

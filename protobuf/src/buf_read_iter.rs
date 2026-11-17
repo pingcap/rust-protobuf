@@ -6,17 +6,12 @@ use std::mem;
 use std::u64;
 
 #[cfg(feature = "bytes")]
-use bytes::BufMut;
-#[cfg(feature = "bytes")]
 use bytes::Bytes;
-#[cfg(feature = "bytes")]
-use bytes::BytesMut;
 
 use error::WireError;
+use stream::READ_RAW_BYTES_MAX_ALLOC;
 use ProtobufError;
 use ProtobufResult;
-use stream::READ_RAW_BYTES_MAX_ALLOC;
-
 
 // If an input stream is constructed with a `Read`, we create a
 // `BufReader` with an internal buffer of this size.
@@ -269,12 +264,8 @@ impl<'ignore> BufReadIter<'ignore> {
                 }
             }
         } else {
-            target.reserve_exact(count);
-
-            unsafe {
-                self.read_exact(&mut target.get_unchecked_mut(..count))?;
-                target.set_len(count);
-            }
+            target.resize(count, 0);
+            self.read_exact(target)?;
         }
 
         debug_assert_eq!(count, target.len());
@@ -298,23 +289,9 @@ impl<'ignore> BufReadIter<'ignore> {
             self.pos_within_buf += len;
             Ok(r)
         } else {
-            if len >= READ_RAW_BYTES_MAX_ALLOC {
-                // We cannot trust `len` because protobuf message could be malformed.
-                // Reading should not result in OOM when allocating a buffer.
-                let mut v = Vec::new();
-                self.read_exact_to_vec(len, &mut v)?;
-                Ok(Bytes::from(v))
-            } else {
-                let mut r = BytesMut::with_capacity(len);
-                unsafe {
-                    let buf = std::slice::from_raw_parts_mut(r.as_mut_ptr(), len);
-                    self.read_exact(buf)?;
-                }
-                unsafe {
-                    r.advance_mut(len);
-                }
-                Ok(r.freeze())
-            }
+            let mut v = Vec::new();
+            self.read_exact_to_vec(len, &mut v)?;
+            Ok(Bytes::from(v))
         }
     }
 
@@ -458,7 +435,6 @@ mod test_bytes {
         assert_eq!(&bytes[..90].as_ptr(), &read.as_ptr());
         assert_eq!(bytes[90], bri.read_byte().expect("read_byte"));
     }
-
 }
 
 #[cfg(test)]

@@ -145,7 +145,6 @@ pub mod wire_format {
             self.field_number
         }
     }
-
 }
 
 /// Buffered read with handy utilities.
@@ -714,41 +713,7 @@ impl<'a> CodedInputStream<'a> {
     /// Read raw bytes into the supplied vector.  The vector will be resized as needed and
     /// overwritten.
     pub fn read_raw_bytes_into(&mut self, count: u32, target: &mut Vec<u8>) -> ProtobufResult<()> {
-        if false {
-            // Master uses this version, but keep existing version for a while
-            // to avoid possible breakages.
-            return self.source.read_exact_to_vec(count as usize, target);
-        }
-
-        let count = count as usize;
-
-        // TODO: also do some limits when reading from unlimited source
-        if count as u64 > self.source.bytes_until_limit() {
-            return Err(ProtobufError::WireError(WireError::TruncatedMessage));
-        }
-
-        unsafe {
-            target.set_len(0);
-        }
-
-        if count >= READ_RAW_BYTES_MAX_ALLOC {
-            // avoid calling `reserve` on buf with very large buffer: could be a malformed message
-
-            let mut take = self.by_ref().take(count as u64);
-            take.read_to_end(target)?;
-
-            if target.len() != count {
-                return Err(ProtobufError::WireError(WireError::TruncatedMessage));
-            }
-        } else {
-            target.reserve(count);
-            unsafe {
-                target.set_len(count);
-            }
-
-            self.source.read_exact(target)?;
-        }
-        Ok(())
+        self.source.read_exact_to_vec(count as usize, target)
     }
 
     /// Read exact number of bytes
@@ -973,10 +938,7 @@ impl<'a> CodedOutputStream<'a> {
     pub fn new(writer: &'a mut Write) -> CodedOutputStream<'a> {
         let buffer_len = OUTPUT_STREAM_BUFFER_SIZE;
 
-        let mut buffer_storage = Vec::with_capacity(buffer_len);
-        unsafe {
-            buffer_storage.set_len(buffer_len);
-        }
+        let mut buffer_storage = vec![0; buffer_len];
 
         let buffer = unsafe { remove_lifetime_mut(&mut buffer_storage as &mut [u8]) };
 
@@ -1037,6 +999,13 @@ impl<'a> CodedOutputStream<'a> {
                 assert!(vec_len + self.position <= vec.capacity());
                 vec.set_len(vec_len + self.position);
                 vec.reserve(1);
+                // The output buffer is a byte slice, so its spare capacity must
+                // be initialized before creating a reference to it.
+                std::ptr::write_bytes(
+                    vec.as_mut_ptr().add(vec.len()),
+                    0,
+                    vec.capacity() - vec.len(),
+                );
                 self.buffer = remove_lifetime_mut(remaining_capacity_as_slice_mut(vec));
                 self.position = 0;
             },
@@ -1101,6 +1070,12 @@ impl<'a> CodedOutputStream<'a> {
             OutputTarget::Vec(ref mut vec) => {
                 vec.extend(bytes);
                 unsafe {
+                    // `extend` can reallocate, leaving new spare capacity uninitialized.
+                    std::ptr::write_bytes(
+                        vec.as_mut_ptr().add(vec.len()),
+                        0,
+                        vec.capacity() - vec.len(),
+                    );
                     self.buffer = remove_lifetime_mut(remaining_capacity_as_slice_mut(vec));
                 }
             }
@@ -1445,6 +1420,48 @@ mod test {
     use super::CodedInputStream;
     use super::CodedOutputStream;
     use super::READ_RAW_BYTES_MAX_ALLOC;
+
+    #[test]
+    fn truncated_and_erroring_reads_leave_initialized_bytes() {
+        struct ErrorAfterPrefix(bool);
+        impl Read for ErrorAfterPrefix {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if !self.0 {
+                    self.0 = true;
+                    buf[..2].copy_from_slice(b"hi");
+                    Ok(2)
+                } else {
+                    Err(io::Error::new(io::ErrorKind::Other, "reader failed"))
+                }
+            }
+        }
+
+        let mut input = io::Cursor::new(b"hi".to_vec());
+        let mut target = vec![0xff; 16];
+        assert!(CodedInputStream::new(&mut input)
+            .read_raw_bytes_into(8, &mut target)
+            .is_err());
+        assert_eq!(target, b"hi\0\0\0\0\0\0");
+
+        let mut input = ErrorAfterPrefix(false);
+        target.fill(0xff);
+        assert!(CodedInputStream::new(&mut input)
+            .read_raw_bytes_into(8, &mut target)
+            .is_err());
+        assert_eq!(target, b"hi\0\0\0\0\0\0");
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn bytes_feature_reads_from_reader_safely() {
+        let mut input = io::Cursor::new(b"hello".to_vec());
+        let mut stream = CodedInputStream::new(&mut input);
+        assert_eq!(&stream.read_raw_callerche_bytes(5).unwrap()[..], b"hello");
+        let mut input = io::Cursor::new(b"hi".to_vec());
+        assert!(CodedInputStream::new(&mut input)
+            .read_raw_callerche_bytes(8)
+            .is_err());
+    }
 
     fn test_read_partial<F>(hex: &str, mut callback: F)
     where

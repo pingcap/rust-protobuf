@@ -121,11 +121,7 @@ pub trait Message: fmt::Debug + Clear + Any + Send + Sync {
         self.check_initialized()?;
 
         let size = self.compute_size() as usize;
-        let mut v = Vec::with_capacity(size);
-        // skip zerofill
-        unsafe {
-            v.set_len(size);
-        }
+        let mut v = vec![0; size];
         {
             let mut os = CodedOutputStream::bytes(&mut v);
             self.write_to_with_cached_sizes(&mut os)?;
@@ -526,6 +522,64 @@ mod test {
     use crate::atomic_flags::{
         set_redact_level, DEFAULT_REDACT_MARKER_HEAD, DEFAULT_REDACT_MARKER_TAIL,
     };
+
+    #[derive(Debug)]
+    struct ShortMessage;
+
+    impl Clear for ShortMessage {
+        fn clear(&mut self) {}
+    }
+
+    impl Message for ShortMessage {
+        fn descriptor(&self) -> &'static MessageDescriptor {
+            panic!()
+        }
+        fn is_initialized(&self) -> bool {
+            true
+        }
+        fn merge_from(&mut self, _: &mut CodedInputStream) -> ProtobufResult<()> {
+            panic!()
+        }
+        fn write_to_with_cached_sizes(&self, os: &mut CodedOutputStream) -> ProtobufResult<()> {
+            os.write_raw_byte(42)
+        }
+        fn compute_size(&self) -> u32 {
+            8
+        }
+        fn get_cached_size(&self) -> u32 {
+            8
+        }
+        fn get_unknown_fields(&self) -> &UnknownFields {
+            panic!()
+        }
+        fn mut_unknown_fields(&mut self) -> &mut UnknownFields {
+            panic!()
+        }
+        fn as_any(&self) -> &Any {
+            self
+        }
+        fn new() -> Self {
+            ShortMessage
+        }
+        fn default_instance() -> &'static Self {
+            panic!()
+        }
+    }
+
+    #[test]
+    fn size_mismatch_never_emits_unwritten_bytes() {
+        let message = ShortMessage;
+        assert!(std::panic::catch_unwind(|| message.write_to_bytes()).is_err());
+        assert_eq!(
+            message.write_length_delimited_to_bytes().unwrap(),
+            vec![8, 42]
+        );
+        let mut output = Vec::new();
+        message
+            .write_length_delimited_to_writer(&mut output)
+            .unwrap();
+        assert_eq!(output, vec![8, 42]);
+    }
 
     #[test]
     fn test_redact_bytes() {
