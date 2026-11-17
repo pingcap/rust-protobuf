@@ -1,23 +1,11 @@
 extern crate protobuf;
 
 use protobuf::error::WireError;
-use protobuf::well_known_types::{Struct, Value};
+use protobuf::well_known_types::{ListValue, Struct, Value};
 use protobuf::wire_format::WireTypeLengthDelimited;
 use protobuf::{
     CodedInputStream, Message, ProtobufError, ProtobufResult, RepeatedField, SingularPtrField,
 };
-
-fn length_delimited(tag: u8, payload: Vec<u8>) -> Vec<u8> {
-    let mut bytes = vec![tag];
-    let mut len = payload.len();
-    while len >= 128 {
-        bytes.push((len as u8 & 0x7f) | 0x80);
-        len >>= 7;
-    }
-    bytes.push(len as u8);
-    bytes.extend(payload);
-    bytes
-}
 
 fn assert_limit<T>(result: ProtobufResult<T>) {
     match result {
@@ -29,23 +17,26 @@ fn assert_limit<T>(result: ProtobufResult<T>) {
 
 // Each layer is Struct.fields -> map entry value -> Value.struct_value -> Struct.
 fn nested_struct(depth: usize) -> Vec<u8> {
-    let mut bytes = Vec::new();
+    let mut message = Struct::new();
     for _ in 0..depth {
-        let value = length_delimited(0x2a, bytes);
-        let entry = length_delimited(0x12, value);
-        bytes = length_delimited(0x0a, entry);
+        let mut value = Value::new();
+        value.set_struct_value(message);
+        message = Struct::new();
+        message.mut_fields().insert(String::new(), value);
     }
-    bytes
+    message.write_to_bytes().unwrap()
 }
 
 // Each layer is Value.list_value -> ListValue.values -> Value.
 fn nested_list(depth: usize) -> Vec<u8> {
-    let mut bytes = Vec::new();
+    let mut value = Value::new();
     for _ in 0..depth {
-        let list = length_delimited(0x0a, bytes);
-        bytes = length_delimited(0x32, list);
+        let mut list = ListValue::new();
+        list.mut_values().push(value);
+        value = Value::new();
+        value.set_list_value(list);
     }
-    bytes
+    value.write_to_bytes().unwrap()
 }
 
 fn check_depth<M: Message>(bytes: &[u8], depth: u32) {
