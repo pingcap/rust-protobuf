@@ -52,3 +52,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Test tooling
         run: cargo test -p protobuf-codegen -p protobuf-codegen-pure -p protoc -p protoc-rust
+
+  grpcio-compiler:
+    name: grpcio-compiler compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check grpcio-compiler against this protobuf
+        run: cargo check --manifest-path ci/grpcio-compiler-compat/Cargo.toml
