@@ -39,6 +39,27 @@ use self::extensions::*;
 use self::message::*;
 use inside::protobuf_crate_path;
 
+// Naming choices belong to code generation, not the public descriptor scopes.
+struct CodegenRootScope<'a> {
+    scope: RootScope<'a>,
+    default_prost_style: bool,
+}
+
+impl<'a> CodegenRootScope<'a> {
+    fn prost_style_for_file(&self, file: &FileDescriptorProto) -> bool {
+        protobuf::rustproto::exts::prost_style_all
+            .get(file.get_options())
+            .unwrap_or(self.default_prost_style)
+    }
+}
+
+impl<'a> ::std::ops::Deref for CodegenRootScope<'a> {
+    type Target = RootScope<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.scope
+    }
+}
+
 fn escape_byte(s: &mut String, b: u8) {
     if b == b'\n' {
         write!(s, "\\n").unwrap();
@@ -124,7 +145,7 @@ fn write_file_descriptor_data(
 fn gen_file(
     file: &FileDescriptorProto,
     _files_map: &HashMap<&str, &FileDescriptorProto>,
-    root_scope: &RootScope,
+    root_scope: &CodegenRootScope,
     customize: &Customize,
 ) -> Option<compiler_plugin::GenResult> {
     // TODO: use it
@@ -134,7 +155,6 @@ fn gen_file(
 
     let scope = FileScope {
         file_descriptor: file,
-        prost_style: customize.prost_style.unwrap_or(true),
     }
     .to_scope();
     let lite_runtime = customize.lite_runtime.unwrap_or_else(|| {
@@ -197,9 +217,9 @@ pub fn gen(
     files_to_generate: &[String],
     customize: &Customize,
 ) -> Vec<compiler_plugin::GenResult> {
-    let root_scope = RootScope {
-        file_descriptors: file_descriptors,
-        prost_style: customize.prost_style.unwrap_or(true),
+    let root_scope = CodegenRootScope {
+        scope: RootScope { file_descriptors },
+        default_prost_style: customize.prost_style.unwrap_or(true),
     };
 
     let mut results: Vec<compiler_plugin::GenResult> = Vec::new();
@@ -299,8 +319,12 @@ fn naming_and_pb_print_options_are_independent() {
 #[test]
 fn file_options_and_plugin_parameters_are_parsed() {
     let extensions = protobuf::rustproto::file_descriptor_proto().get_extension();
-    assert!(extensions.iter().any(|e| e.get_name() == "prost_style_all" && e.get_number() == 18000));
-    assert!(extensions.iter().any(|e| e.get_name() == "generate_pb_print_all" && e.get_number() == 18001));
+    assert!(extensions
+        .iter()
+        .any(|e| e.get_name() == "prost_style_all" && e.get_number() == 18000));
+    assert!(extensions
+        .iter()
+        .any(|e| e.get_name() == "generate_pb_print_all" && e.get_number() == 18001));
     let customize =
         Customize::parse_from_parameter("prost_style=false generate_pb_print=false").unwrap();
     assert_eq!(customize.prost_style, Some(false));

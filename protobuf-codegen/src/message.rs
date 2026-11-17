@@ -1,5 +1,6 @@
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
+use CodegenRootScope;
 
 use super::code_writer::*;
 use super::customize::customize_from_rustproto_for_message;
@@ -15,7 +16,7 @@ use serde;
 /// Message info for codegen
 pub struct MessageGen<'a> {
     pub(crate) message: &'a MessageWithScope<'a>,
-    pub(crate) root_scope: &'a RootScope<'a>,
+    pub(crate) root_scope: &'a CodegenRootScope<'a>,
     type_name: String,
     pub fields: Vec<FieldGen<'a>>,
     pub lite_runtime: bool,
@@ -25,7 +26,7 @@ pub struct MessageGen<'a> {
 impl<'a> MessageGen<'a> {
     pub fn new(
         message: &'a MessageWithScope<'a>,
-        root_scope: &'a RootScope<'a>,
+        root_scope: &'a CodegenRootScope<'a>,
         customize: &Customize,
     ) -> MessageGen<'a> {
         let mut customize = customize.clone();
@@ -48,7 +49,7 @@ impl<'a> MessageGen<'a> {
         MessageGen {
             message: message,
             root_scope: root_scope,
-            type_name: message.rust_name(),
+            type_name: message.rust_name_with_style(customize.prost_style.unwrap_or(true)),
             fields: fields,
             lite_runtime,
             customize,

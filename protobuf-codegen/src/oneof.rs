@@ -7,10 +7,11 @@ use message::MessageGen;
 use protobuf::descriptor::FieldDescriptorProto_Type;
 use protobuf::descriptorx::OneofWithContext;
 use protobuf::descriptorx::WithScope;
-use protobuf::descriptorx::{camel_case, FieldWithContext, OneofVariantWithContext, RootScope};
+use protobuf::descriptorx::{camel_case, FieldWithContext, OneofVariantWithContext};
 use rust_types_values::RustType;
 use serde;
 use std::collections::HashSet;
+use CodegenRootScope;
 use Customize;
 
 // oneof one { ... }
@@ -26,7 +27,11 @@ impl OneofField {
     // Detecting recursion: if oneof fields contains a self-reference
     // or another message which has a reference to self,
     // put oneof variant into a box.
-    fn need_boxed(field: &FieldWithContext, root_scope: &RootScope, owner_name: &str) -> bool {
+    fn need_boxed(
+        field: &FieldWithContext,
+        root_scope: &CodegenRootScope,
+        owner_name: &str,
+    ) -> bool {
         let mut visited_messages = HashSet::new();
         let mut fields = vec![field.clone()];
         while let Some(field) = fields.pop() {
@@ -49,14 +54,15 @@ impl OneofField {
         oneof: &OneofWithContext,
         field: &FieldWithContext,
         elem: FieldElem,
-        root_scope: &RootScope,
+        root_scope: &CodegenRootScope,
+        prost_style: bool,
     ) -> OneofField {
         let boxed = OneofField::need_boxed(field, root_scope, &oneof.message.name_absolute());
 
         OneofField {
             elem: elem,
             oneof_name: oneof.name().to_string(),
-            oneof_type_name: RustType::Oneof(oneof.rust_name()),
+            oneof_type_name: RustType::Oneof(oneof.rust_name_with_style(prost_style)),
             boxed: boxed,
         }
     }
@@ -87,7 +93,7 @@ impl<'a> OneofVariantGen<'a> {
         oneof: &'a OneofGen<'a>,
         variant: OneofVariantWithContext<'a>,
         field: &'a FieldGen,
-        _root_scope: &RootScope,
+        _root_scope: &CodegenRootScope,
         customize: Customize,
     ) -> OneofVariantGen<'a> {
         let mut field = field.clone();
@@ -111,6 +117,7 @@ impl<'a> OneofVariantGen<'a> {
                 &field.proto_field,
                 field.oneof().elem.clone(),
                 oneof.message.root_scope,
+                customize.prost_style.unwrap_or(true),
             ),
             field,
             customize,
@@ -142,7 +149,7 @@ impl<'a> OneofGen<'a> {
         oneof: OneofWithContext<'a>,
         customize: &Customize,
     ) -> OneofGen<'a> {
-        let rust_name = oneof.rust_name();
+        let rust_name = oneof.rust_name_with_style(customize.prost_style.unwrap_or(true));
         OneofGen {
             message: message,
             oneof: oneof,

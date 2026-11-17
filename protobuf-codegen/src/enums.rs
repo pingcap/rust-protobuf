@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use CodegenRootScope;
 
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
@@ -50,6 +51,7 @@ impl EnumValueGen {
 pub struct EnumGen<'a> {
     enum_with_scope: &'a EnumWithScope<'a>,
     type_name: String,
+    prost_style: bool,
     lite_runtime: bool,
     customize: Customize,
 }
@@ -59,13 +61,14 @@ impl<'a> EnumGen<'a> {
         enum_with_scope: &'a EnumWithScope<'a>,
         current_file: &FileDescriptorProto,
         customize: &Customize,
-        root_scope: &RootScope,
+        root_scope: &CodegenRootScope,
     ) -> EnumGen<'a> {
+        let prost_style = root_scope.prost_style_for_file(enum_with_scope.get_file_descriptor());
         let rust_name = if enum_with_scope.get_scope().get_file_descriptor().get_name()
             == current_file.get_name()
         {
             // field type is a message or enum declared in the same file
-            enum_with_scope.rust_name()
+            enum_with_scope.rust_name_with_style(prost_style)
         } else {
             type_name_to_rust_relative(
                 &enum_with_scope.name_absolute(),
@@ -86,6 +89,7 @@ impl<'a> EnumGen<'a> {
         EnumGen {
             enum_with_scope,
             type_name: rust_name,
+            prost_style,
             lite_runtime: lite_runtime,
             customize: customize.clone(),
         }
@@ -98,11 +102,7 @@ impl<'a> EnumGen<'a> {
     fn values_all(&self) -> Vec<EnumValueGen> {
         let mut r = Vec::new();
         for p in self.enum_with_scope.values() {
-            r.push(EnumValueGen::parse(
-                p,
-                &self.type_name,
-                self.enum_with_scope.scope.file_scope.prost_style,
-            ));
+            r.push(EnumValueGen::parse(p, &self.type_name, self.prost_style));
         }
         r
     }
@@ -116,11 +116,7 @@ impl<'a> EnumGen<'a> {
             if !used.insert(p.get_number()) {
                 continue;
             }
-            r.push(EnumValueGen::parse(
-                p,
-                &self.type_name,
-                self.enum_with_scope.scope.file_scope.prost_style,
-            ));
+            r.push(EnumValueGen::parse(p, &self.type_name, self.prost_style));
         }
         r
     }
@@ -130,7 +126,7 @@ impl<'a> EnumGen<'a> {
         EnumValueGen::parse(
             self.enum_with_scope.value_by_name(name),
             &self.type_name,
-            self.enum_with_scope.scope.file_scope.prost_style,
+            self.prost_style,
         )
     }
 
@@ -255,7 +251,7 @@ impl<'a> EnumGen<'a> {
                 w.write_line("");
                 w.def_fn(&format!("enum_descriptor_static() -> &'static ::protobuf::reflect::EnumDescriptor"), |w| {
                     w.lazy_static_decl_get("descriptor", "::protobuf::reflect::EnumDescriptor", |w| {
-                        let descriptor_name = if self.enum_with_scope.scope.file_scope.prost_style {
+                        let descriptor_name = if self.prost_style {
                             self.type_name.clone()
                         } else {
                             format!(".{}", self.enum_with_scope.name_to_package())
@@ -315,8 +311,7 @@ impl<'a> EnumGen<'a> {
                 w.write_line(&format!(
                     "{}::{}",
                     &self.type_name,
-                    &first_value
-                        .rust_name_with_style(self.enum_with_scope.scope.file_scope.prost_style)
+                    &first_value.rust_name_with_style(self.prost_style)
                 ))
             });
         });
