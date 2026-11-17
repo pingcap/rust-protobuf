@@ -241,3 +241,20 @@ pub fn protoc_gen_rust_main() {
         gen(r.file_descriptors, r.files_to_generate, &customize)
     });
 }
+
+#[test]
+fn generated_any_methods_support_rust_2015() {
+    let mut file = FileDescriptorProto::new();
+    file.set_name("test.proto".to_owned());
+    let mut message = protobuf::descriptor::DescriptorProto::new();
+    message.set_name("Test".to_owned());
+    file.mut_message_type().push(message);
+
+    let generated = gen(&[file], &["test.proto".to_owned()], &Customize::default());
+    let code = ::std::str::from_utf8(&generated[0].content).unwrap();
+    assert!(code.contains("fn as_any(&self) -> &dyn (::std::any::Any)"));
+    assert!(code.contains("self as &dyn (::std::any::Any)"));
+    assert!(code.contains("fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any)"));
+    assert!(code.contains("self as &mut dyn (::std::any::Any)"));
+    assert!(code.contains("Box<dyn (::std::any::Any)>"));
+}
