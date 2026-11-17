@@ -37,7 +37,7 @@ pub struct Any {
     ///  server that maps type URLs to message definitions as follows:
     ///
     ///  * If no scheme is provided, `https` is assumed.
-    ///  * An HTTP GET on the URL must yield a [google.protobuf.Type][]
+    ///  * An HTTP GET on the URL must yield a `google.protobuf.Type`
     ///    value in binary format, or produce an error.
     ///  * Applications are allowed to cache lookup results based on the
     ///    URL, or have them precompiled into a binary to avoid any
@@ -194,7 +194,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x19\n\x08type_url\x18\x01\x20\x01(\tR\x07typeUrl\x12\x14\n\x05value\x18\
     \x02\x20\x01(\x0cR\x05valueBv\n\x13com.google.protobufB\x08AnyProtoP\x01\
     Z,google.golang.org/protobuf/types/known/anypb\xa2\x02\x03GPB\xaa\x02\
-    \x1eGoogle.Protobuf.WellKnownTypesJ\xf9*\n\x07\x12\x05\x1e\0\x9d\x01\x01\
+    \x1eGoogle.Protobuf.WellKnownTypesJ\xf7*\n\x07\x12\x05\x1e\0\x9d\x01\x01\
     \n\xcc\x0c\n\x01\x0c\x12\x03\x1e\0\x122\xc1\x0c\x20Protocol\x20Buffers\
     \x20-\x20Google's\x20data\x20interchange\x20format\n\x20Copyright\x20200\
     8\x20Google\x20Inc.\x20\x20All\x20rights\x20reserved.\n\x20https://devel\
@@ -288,8 +288,8 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     ion][]):\n\n\x20\x20\x20\x20\x20{\n\x20\x20\x20\x20\x20\x20\x20\"@type\"\
     :\x20\"type.googleapis.com/google.protobuf.Duration\",\n\x20\x20\x20\x20\
     \x20\x20\x20\"value\":\x20\"1.212s\"\n\x20\x20\x20\x20\x20}\n\n\n\n\n\
-    \x03\x04\0\x01\x12\x03|\x08\x0b\n\xd7\n\n\x04\x04\0\x02\0\x12\x04\x99\
-    \x01\x02\x16\x1a\xc8\n\x20A\x20URL/resource\x20name\x20that\x20uniquely\
+    \x03\x04\0\x01\x12\x03|\x08\x0b\n\xd5\n\n\x04\x04\0\x02\0\x12\x04\x99\
+    \x01\x02\x16\x1a\xc6\n\x20A\x20URL/resource\x20name\x20that\x20uniquely\
     \x20identifies\x20the\x20type\x20of\x20the\x20serialized\n\x20protocol\
     \x20buffer\x20message.\x20This\x20string\x20must\x20contain\x20at\x20lea\
     st\n\x20one\x20\"/\"\x20character.\x20The\x20last\x20segment\x20of\x20th\
@@ -305,9 +305,9 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20maps\x20type\x20URLs\x20to\x20message\x20definitions\x20as\x20follow\
     s:\n\n\x20*\x20If\x20no\x20scheme\x20is\x20provided,\x20`https`\x20is\
     \x20assumed.\n\x20*\x20An\x20HTTP\x20GET\x20on\x20the\x20URL\x20must\x20\
-    yield\x20a\x20[google.protobuf.Type][]\n\x20\x20\x20value\x20in\x20binar\
-    y\x20format,\x20or\x20produce\x20an\x20error.\n\x20*\x20Applications\x20\
-    are\x20allowed\x20to\x20cache\x20lookup\x20results\x20based\x20on\x20the\
+    yield\x20a\x20`google.protobuf.Type`\n\x20\x20\x20value\x20in\x20binary\
+    \x20format,\x20or\x20produce\x20an\x20error.\n\x20*\x20Applications\x20a\
+    re\x20allowed\x20to\x20cache\x20lookup\x20results\x20based\x20on\x20the\
     \n\x20\x20\x20URL,\x20or\x20have\x20them\x20precompiled\x20into\x20a\x20\
     binary\x20to\x20avoid\x20any\n\x20\x20\x20lookup.\x20Therefore,\x20binar\
     y\x20compatibility\x20needs\x20to\x20be\x20preserved\n\x20\x20\x20on\x20\
