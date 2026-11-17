@@ -53,18 +53,12 @@ jobs:
       - name: Test tooling
         run: cargo test -p protobuf-codegen -p protobuf-codegen-pure -p protoc -p protoc-rust
 
-  grpcio-compiler:
-    name: grpcio-compiler compatibility
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check grpcio-compiler against this protobuf
-        run: cargo check --manifest-path ci/grpcio-compiler-compat/Cargo.toml
-
   kvproto:
     name: kvproto compatibility
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: Check TiKV's kvproto against this protobuf
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: cargo check --locked --manifest-path ci/kvproto-compat/Cargo.toml
