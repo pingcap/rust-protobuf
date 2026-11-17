@@ -1,8 +1,7 @@
 rust-protobuf
 =============
 
-<!-- https://travis-ci.org/stepancheg/rust-protobuf.png -->
-[![Build Status](https://img.shields.io/travis/stepancheg/rust-protobuf.svg)](https://travis-ci.org/stepancheg/rust-protobuf)
+[![CI](https://github.com/pingcap/rust-protobuf/actions/workflows/ci.yml/badge.svg)](https://github.com/pingcap/rust-protobuf/actions/workflows/ci.yml)
 [![crates.io version](https://img.shields.io/crates/v/protobuf.svg)](https://crates.io/crates/protobuf)
 [![License](https://img.shields.io/crates/l/protobuf.svg)](https://github.com/stepancheg/rust-protobuf/blob/master/LICENSE.txt)
 
