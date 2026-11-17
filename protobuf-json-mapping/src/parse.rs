@@ -44,6 +44,8 @@ use super::rfc_3339;
 use crate::base64::FromBase64Error;
 use crate::well_known_wrapper::WellKnownWrapper;
 
+const DEFAULT_RECURSION_LIMIT: u32 = 100;
+
 #[derive(Debug, thiserror::Error)]
 enum ParseErrorWithoutLocInner {
     #[error(transparent)]
@@ -76,6 +78,8 @@ enum ParseErrorWithoutLocInner {
     AnyParsingIsNotImplemented,
     #[error("Message not initialized")]
     MessageNotInitialized,
+    #[error("Recursion limit exceeded")]
+    RecursionLimitExceeded,
 }
 
 /// JSON parse error.
@@ -128,6 +132,7 @@ type ParseResult<A> = Result<A, ParseError>;
 struct Parser<'a> {
     tokenizer: Tokenizer<'a>,
     parse_options: ParseOptions,
+    recursion_depth: u32,
 }
 
 trait FromJsonNumber: PartialEq + Sized {
@@ -237,6 +242,22 @@ impl FromJsonNumber for f64 {
 }
 
 impl<'a> Parser<'a> {
+    fn with_recursion<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> ParseResultWithoutLoc<T>,
+    ) -> ParseResultWithoutLoc<T> {
+        if self.recursion_depth >= self.parse_options.recursion_limit {
+            return Err(ParseErrorWithoutLoc(
+                ParseErrorWithoutLocInner::RecursionLimitExceeded,
+            ));
+        }
+
+        self.recursion_depth += 1;
+        let result = f(self);
+        self.recursion_depth -= 1;
+        result
+    }
+
     fn read_bool(&mut self) -> ParseResultWithoutLoc<bool> {
         if self.tokenizer.next_ident_if_eq("true")? {
             Ok(true)
@@ -398,7 +419,7 @@ impl<'a> Parser<'a> {
         descriptor: &MessageDescriptor,
     ) -> ParseResultWithoutLoc<Box<dyn MessageDyn>> {
         let mut m = descriptor.new_instance();
-        self.merge_inner(&mut *m)?;
+        self.with_recursion(|parser| parser.merge_inner(&mut *m))?;
         Ok(m)
     }
 
@@ -568,9 +589,11 @@ impl<'a> Parser<'a> {
         } else if self.tokenizer.lookahead_is_json_number()? {
             self.read_json_number_opt()?;
         } else if self.tokenizer.lookahead_is_symbol('[')? {
-            self.read_list(|s| s.skip_json_value())?;
+            self.with_recursion(|parser| parser.read_list(|s| s.skip_json_value()))?;
         } else if self.tokenizer.lookahead_is_symbol('{')? {
-            self.read_map(|_, _| Ok(()), |s, ()| s.skip_json_value())?;
+            self.with_recursion(|parser| {
+                parser.read_map(|_, _| Ok(()), |s, ()| s.skip_json_value())
+            })?;
         } else {
             return Err(ParseErrorWithoutLoc(
                 ParseErrorWithoutLocInner::UnexpectedToken,
@@ -804,9 +827,13 @@ impl<'a> Parser<'a> {
         } else if self.tokenizer.lookahead_is_str_lit()? {
             value.kind = Some(struct_::value::Kind::StringValue(self.read_string()?));
         } else if self.tokenizer.lookahead_is_symbol('[')? {
-            value.kind = Some(struct_::value::Kind::ListValue(self.read_wk_list_value()?));
+            value.kind = Some(struct_::value::Kind::ListValue(
+                self.with_recursion(|parser| parser.read_wk_list_value())?,
+            ));
         } else if self.tokenizer.lookahead_is_symbol('{')? {
-            value.kind = Some(struct_::value::Kind::StructValue(self.read_wk_struct()?));
+            value.kind = Some(struct_::value::Kind::StructValue(
+                self.with_recursion(|parser| parser.read_wk_struct())?,
+            ));
         } else {
             return Err(ParseErrorWithoutLoc(
                 ParseErrorWithoutLocInner::UnexpectedToken,
@@ -848,15 +875,29 @@ impl<'a> Parser<'a> {
 ///     ..Default::default()
 /// };
 /// ```
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ParseOptions {
     /// Ignore unknown fields when parsing.
     ///
     /// When `true` fields with unknown names are ignored.
     /// When `false` parser returns an error on unknown field.
     pub ignore_unknown_fields: bool,
+    /// Maximum recursive nesting depth accepted by the parser.
+    ///
+    /// Defaults to 100. Large values may exhaust the call stack.
+    pub recursion_limit: u32,
     /// Prevent initializing `ParseOptions` enumerating all field.
     pub _future_options: (),
+}
+
+impl Default for ParseOptions {
+    fn default() -> Self {
+        Self {
+            ignore_unknown_fields: false,
+            recursion_limit: DEFAULT_RECURSION_LIMIT,
+            _future_options: (),
+        }
+    }
 }
 
 /// Merge JSON into provided message
@@ -868,6 +909,7 @@ pub fn merge_from_str_with_options(
     let mut parser = Parser {
         tokenizer: Tokenizer::new(json, ParserLanguage::Json),
         parse_options: parse_options.clone(),
+        recursion_depth: 0,
     };
     parser.merge(message)
 }

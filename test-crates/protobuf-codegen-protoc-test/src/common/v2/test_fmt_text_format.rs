@@ -5,6 +5,20 @@ use protobuf_test_common::*;
 
 use super::test_fmt_text_format_pb::*;
 
+fn nested_text_message(depth: usize, delimiters: (char, char)) -> String {
+    let mut text = String::new();
+    for _ in 0..depth {
+        text.push_str("child ");
+        text.push(delimiters.0);
+        text.push(' ');
+    }
+    for _ in 0..depth {
+        text.push(delimiters.1);
+        text.push(' ');
+    }
+    text
+}
+
 #[test]
 fn test_display() {
     let mut m = TestTypes::new();
@@ -188,6 +202,52 @@ fn test_parse_error() {
     let e = protobuf::text_format::parse_from_str::<TestTypes>("nonexistent: 42").unwrap_err();
     let _error: &dyn std::error::Error = &e;
     assert_eq!(e.to_string(), "1:1: Unknown field: `nonexistent`");
+}
+
+#[test]
+fn test_recursion_limit_rejects_deeply_nested_messages() {
+    let parse_options = protobuf::text_format::ParseOptions {
+        recursion_limit: 3,
+        ..Default::default()
+    };
+
+    for delimiters in [('{', '}'), ('<', '>')] {
+        protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
+            &nested_text_message(3, delimiters),
+            &parse_options,
+        )
+        .unwrap();
+        let error = protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
+            &nested_text_message(4, delimiters),
+            &parse_options,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("Recursion limit exceeded"));
+    }
+
+    let shallow_text = "children {} ".repeat(10);
+    let shallow_options = protobuf::text_format::ParseOptions {
+        recursion_limit: 1,
+        ..Default::default()
+    };
+    protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
+        &shallow_text,
+        &shallow_options,
+    )
+    .unwrap();
+
+    protobuf::text_format::parse_from_str::<RecursiveMessage>(&nested_text_message(
+        100,
+        ('{', '}'),
+    ))
+    .unwrap();
+    assert!(
+        protobuf::text_format::parse_from_str::<RecursiveMessage>(&nested_text_message(
+            101,
+            ('{', '}'),
+        ))
+        .is_err()
+    );
 }
 
 fn t<F: FnMut(&mut TestTypes)>(expected: &str, mut setter: F) {

@@ -29,8 +29,11 @@ mod parse;
 mod print;
 
 pub use self::parse::merge_from_str;
+pub use self::parse::merge_from_str_with_options;
 pub use self::parse::parse_from_str;
+pub use self::parse::parse_from_str_with_options;
 pub use self::parse::ParseError;
+pub use self::parse::ParseOptions;
 pub use self::print::fmt;
 pub use self::print::print_to;
 pub use self::print::print_to_string;

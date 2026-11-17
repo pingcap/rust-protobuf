@@ -16,6 +16,8 @@ use crate::reflect::ReflectValueBox;
 use crate::reflect::RuntimeFieldType;
 use crate::reflect::RuntimeType;
 
+const DEFAULT_RECURSION_LIMIT: u32 = 100;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ParseErrorWithoutLoc {
     #[error(transparent)]
@@ -34,6 +36,8 @@ pub enum ParseErrorWithoutLoc {
     ExpectingBool,
     #[error("Message not initialized")]
     MessageNotInitialized,
+    #[error("Recursion limit exceeded")]
+    RecursionLimitExceeded,
 }
 
 impl From<int::Overflow> for ParseErrorWithoutLoc {
@@ -56,9 +60,22 @@ pub type ParseWithLocResult<A> = Result<A, ParseError>;
 #[derive(Clone)]
 struct Parser<'a> {
     tokenizer: Tokenizer<'a>,
+    parse_options: ParseOptions,
+    recursion_depth: u32,
 }
 
 impl<'a> Parser<'a> {
+    fn with_recursion<T>(&mut self, f: impl FnOnce(&mut Self) -> ParseResult<T>) -> ParseResult<T> {
+        if self.recursion_depth >= self.parse_options.recursion_limit {
+            return Err(ParseErrorWithoutLoc::RecursionLimitExceeded);
+        }
+
+        self.recursion_depth += 1;
+        let result = f(self);
+        self.recursion_depth -= 1;
+        result
+    }
+
     // Text format
 
     fn next_field_name(&mut self) -> ParseResult<String> {
@@ -171,14 +188,17 @@ impl<'a> Parser<'a> {
 
     fn read_message(&mut self, descriptor: &MessageDescriptor) -> ParseResult<Box<dyn MessageDyn>> {
         let mut message = descriptor.new_instance();
-
-        let symbol = self.tokenizer.next_symbol_expect_eq_oneof(&['{', '<'])?;
-        let terminator = if symbol == '{' { '}' } else { '>' };
-        while !self.tokenizer.lookahead_is_symbol(terminator)? {
-            self.merge_field(&mut *message, descriptor)?;
-        }
-        self.tokenizer
-            .next_symbol_expect_eq(terminator, "message")?;
+        self.with_recursion(|parser| {
+            let symbol = parser.tokenizer.next_symbol_expect_eq_oneof(&['{', '<'])?;
+            let terminator = if symbol == '{' { '}' } else { '>' };
+            while !parser.tokenizer.lookahead_is_symbol(terminator)? {
+                parser.merge_field(&mut *message, descriptor)?;
+            }
+            parser
+                .tokenizer
+                .next_symbol_expect_eq(terminator, "message")?;
+            Ok(())
+        })?;
         Ok(message)
     }
 
@@ -297,20 +317,56 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// Text format parse options.
+#[derive(Debug, Clone)]
+pub struct ParseOptions {
+    /// Maximum recursive nesting depth accepted by the parser.
+    ///
+    /// Defaults to 100. Large values may exhaust the call stack.
+    pub recursion_limit: u32,
+    /// Prevent initializing `ParseOptions` by enumerating all fields.
+    pub _future_options: (),
+}
+
+impl Default for ParseOptions {
+    fn default() -> Self {
+        Self {
+            recursion_limit: DEFAULT_RECURSION_LIMIT,
+            _future_options: (),
+        }
+    }
+}
+
 /// Parse text format message.
 ///
 /// This function does not check if message required fields are set.
-pub fn merge_from_str(message: &mut dyn MessageDyn, input: &str) -> ParseWithLocResult<()> {
+pub fn merge_from_str_with_options(
+    message: &mut dyn MessageDyn,
+    input: &str,
+    parse_options: &ParseOptions,
+) -> ParseWithLocResult<()> {
     let mut parser = Parser {
         tokenizer: Tokenizer::new(input, ParserLanguage::TextFormat),
+        parse_options: parse_options.clone(),
+        recursion_depth: 0,
     };
     parser.merge(message)
 }
 
-/// Parse text format message.
-pub fn parse_from_str<M: MessageFull>(input: &str) -> ParseWithLocResult<M> {
+/// Parse text format message using the default options.
+///
+/// This function does not check if message required fields are set.
+pub fn merge_from_str(message: &mut dyn MessageDyn, input: &str) -> ParseWithLocResult<()> {
+    merge_from_str_with_options(message, input, &ParseOptions::default())
+}
+
+/// Parse text format message with the provided options.
+pub fn parse_from_str_with_options<M: MessageFull>(
+    input: &str,
+    parse_options: &ParseOptions,
+) -> ParseWithLocResult<M> {
     let mut m = M::new();
-    merge_from_str(&mut m, input)?;
+    merge_from_str_with_options(&mut m, input, parse_options)?;
     if let Err(_) = m.check_initialized() {
         return Err(ParseError {
             error: ParseErrorWithoutLoc::MessageNotInitialized,
@@ -318,4 +374,9 @@ pub fn parse_from_str<M: MessageFull>(input: &str) -> ParseWithLocResult<M> {
         });
     }
     Ok(m)
+}
+
+/// Parse text format message using the default options.
+pub fn parse_from_str<M: MessageFull>(input: &str) -> ParseWithLocResult<M> {
+    parse_from_str_with_options(input, &ParseOptions::default())
 }

@@ -16,6 +16,11 @@ message TestMessage {
     optional int32 value = 10;
 }
 
+message RecursiveMessage {
+    optional RecursiveMessage child = 1;
+    repeated RecursiveMessage children = 2;
+}
+
 message TestTypes {
     optional double double_singular = 1;
     optional float float_singular = 2;

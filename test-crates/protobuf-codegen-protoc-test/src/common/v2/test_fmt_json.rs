@@ -3,6 +3,14 @@ use protobuf_test_common::*;
 
 use super::test_fmt_json_pb::*;
 
+fn nested_message_json(depth: usize) -> String {
+    let mut json = "{}".to_owned();
+    for _ in 0..depth {
+        json = format!(r#"{{"child":{json}}}"#);
+    }
+    json
+}
+
 #[test]
 fn empty() {
     test_json_print_parse_message("{}", &TestTypes::new());
@@ -333,6 +341,65 @@ fn test_ignore_unknown_fields() {
     protobuf_json_mapping::merge_from_str_with_options(&mut m, json, &parse_options).unwrap();
 
     assert_eq!(expected, m);
+}
+
+#[test]
+fn test_recursion_limit_rejects_deeply_nested_messages() {
+    let parse_options = protobuf_json_mapping::ParseOptions {
+        recursion_limit: 3,
+        ..Default::default()
+    };
+
+    protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+        &nested_message_json(3),
+        &parse_options,
+    )
+    .unwrap();
+    let error = protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+        &nested_message_json(4),
+        &parse_options,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("Recursion limit exceeded"));
+
+    let shallow_children = ["{}"; 10].join(",");
+    let shallow_json = format!(r#"{{"children":[{shallow_children}]}}"#);
+    let shallow_options = protobuf_json_mapping::ParseOptions {
+        recursion_limit: 1,
+        ..Default::default()
+    };
+    protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+        &shallow_json,
+        &shallow_options,
+    )
+    .unwrap();
+
+    protobuf_json_mapping::parse_from_str::<RecursiveMessage>(&nested_message_json(100)).unwrap();
+    assert!(
+        protobuf_json_mapping::parse_from_str::<RecursiveMessage>(&nested_message_json(101))
+            .is_err()
+    );
+}
+
+#[test]
+fn test_recursion_limit_applies_to_ignored_unknown_fields() {
+    let parse_options = protobuf_json_mapping::ParseOptions {
+        ignore_unknown_fields: true,
+        recursion_limit: 2,
+        ..Default::default()
+    };
+
+    protobuf_json_mapping::parse_from_str_with_options::<TestTypes>(
+        r#"{"unknown":[[0]]}"#,
+        &parse_options,
+    )
+    .unwrap();
+    let error = protobuf_json_mapping::parse_from_str_with_options::<TestTypes>(
+        r#"{"unknown":[[[0]]]}"#,
+        &parse_options,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("Recursion limit exceeded"));
 }
 
 #[test]

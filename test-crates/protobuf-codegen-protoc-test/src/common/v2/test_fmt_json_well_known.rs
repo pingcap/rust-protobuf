@@ -9,6 +9,18 @@ use protobuf_test_common::*;
 
 use super::test_fmt_json_well_known_pb::*;
 
+fn nested_value_json(depth: usize) -> String {
+    let mut json = "0".to_owned();
+    for level in 0..depth {
+        json = if level % 2 == 0 {
+            format!("[{json}]")
+        } else {
+            format!(r#"{{"value":{json}}}"#)
+        };
+    }
+    json
+}
+
 #[test]
 fn test_duration() {
     let mut m = TestFmtJsonWellKnownTypes::new();
@@ -72,6 +84,26 @@ fn test_value() {
 
     m.mut_value().set_struct_value(Struct::new());
     test_json_print_parse_message("{\"value\": {}}", &m);
+}
+
+#[test]
+fn test_value_recursion_limit_rejects_deeply_nested_containers() {
+    let parse_options = protobuf_json_mapping::ParseOptions {
+        recursion_limit: 3,
+        ..Default::default()
+    };
+
+    protobuf_json_mapping::parse_from_str_with_options::<Value>(
+        &nested_value_json(3),
+        &parse_options,
+    )
+    .unwrap();
+    let error = protobuf_json_mapping::parse_from_str_with_options::<Value>(
+        &nested_value_json(4),
+        &parse_options,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("Recursion limit exceeded"));
 }
 
 #[test]
