@@ -13,7 +13,7 @@ jobs:
     name: Workspace tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Build protoc plugin
@@ -37,7 +37,7 @@ jobs:
           - name: bytes and serde
             features: with-bytes,with-serde
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Test runtime
         env:
           PROTOBUF_FEATURES: ${{ matrix.features }}
@@ -47,7 +47,7 @@ jobs:
     name: Code generation and protoc tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Test tooling
