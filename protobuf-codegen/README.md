@@ -55,3 +55,21 @@ protoc --rust_out . foo.proto
 ```
 
 This will generate .rs files in current directory.
+
+## Naming and Debug options
+
+This fork defaults to Prost-style identifiers and generates `PbPrint` and
+redacting `Debug` implementations. To use legacy rust-protobuf names and
+`Debug` behavior, set `prost_style` and `generate_pb_print` to `Some(false)`
+in `Customize`, or set the file-level options in a `.proto` file:
+
+```proto
+import "rustproto.proto";
+option (rustproto.prost_style_all) = false;
+option (rustproto.generate_pb_print_all) = false;
+```
+
+The options are independent. Disabling `generate_pb_print` removes the
+generated `PbPrint` implementation and its redaction behavior. Messages
+generated with `PbPrint` enabled require `PbPrint` implementations for their
+message and enum field types, including imported types.

@@ -275,8 +275,14 @@ impl<'a> MessageGen<'a> {
                     ));
                 }
                 AccessorStyle::HasGet => {
-                    w.write_line(&format!("{}::has_{},", self.type_name, field.unesc_rust_name));
-                    w.write_line(&format!("{}::get_{},", self.type_name, field.unesc_rust_name));
+                    w.write_line(&format!(
+                        "{}::has_{},",
+                        self.type_name, field.unesc_rust_name
+                    ));
+                    w.write_line(&format!(
+                        "{}::get_{},",
+                        self.type_name, field.unesc_rust_name
+                    ));
                 }
             }
         });
@@ -298,14 +304,19 @@ impl<'a> MessageGen<'a> {
                             w.write_line(&format!("let mut fields = ::std::vec::Vec::new();"));
                         }
                         for field in fields {
-                            self.write_descriptor_field("fields", field, w);;
+                            self.write_descriptor_field("fields", field, w);
                         }
                         w.write_line(&format!(
                             "::protobuf::reflect::MessageDescriptor::new::<{}>(",
                             self.type_name
                         ));
                         w.indented(|w| {
-                            w.write_line(&format!("\"{}\",", self.type_name));
+                            let descriptor_name = if self.customize.prost_style.unwrap_or(true) {
+                                self.type_name.clone()
+                            } else {
+                                format!(".{}", self.message.name_to_package())
+                            };
+                            w.write_line(&format!("\"{}\",", descriptor_name));
                             w.write_line("fields,");
                             w.write_line("file_descriptor_proto()");
                         });
@@ -401,27 +412,71 @@ impl<'a> MessageGen<'a> {
     }
 
     fn write_impl_show(&self, w: &mut CodeWriter) {
+        if !self.customize.generate_pb_print.unwrap_or(true) {
+            w.impl_for_block("::std::fmt::Debug", &self.type_name, |w| {
+                w.def_fn(
+                    "fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result",
+                    |w| {
+                        if self.lite_runtime {
+                            w.write_line(&format!(
+                                "let mut debug = f.debug_struct({:?});",
+                                self.type_name
+                            ));
+                            for field in self.fields_except_group() {
+                                if !field.is_oneof() {
+                                    w.write_line(&format!(
+                                        "debug.field({:?}, &self.{});",
+                                        field.unesc_rust_name, field.rust_name
+                                    ));
+                                }
+                            }
+                            for oneof in self.oneofs() {
+                                w.write_line(&format!(
+                                    "debug.field({:?}, &self.{});",
+                                    oneof.name(),
+                                    oneof.name()
+                                ));
+                            }
+                            w.write_line("debug.finish()");
+                        } else {
+                            w.write_line("::protobuf::text_format::fmt(self, f)");
+                        }
+                    },
+                );
+            });
+            return;
+        }
         let normal_fields = self.fields_except_oneof_and_group();
         let oneofs = self.oneofs();
         w.impl_for_block("::protobuf::PbPrint", &self.type_name, |w| {
             w.allow(&["unused_variables"]);
-            w.def_fn("fmt(&self, name: &str, buf: &mut ::std::string::String)", |w| {
-                if normal_fields.is_empty() && oneofs.is_empty() {
-                    return;
-                }
-                w.write_line(r#"::protobuf::push_message_start(name, buf);"#);
-                w.write_line(r#"let old_len = buf.len();"#);
-                for field in &normal_fields {
-                    w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", buf);", field.rust_name, field.unesc_rust_name));
-                }
-                for oneof in &oneofs {
-                    w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", buf);", oneof.name(), oneof.name()));
-                }
-                w.write_line("if old_len < buf.len() {");
-                w.write_line("  buf.push(' ');");
-                w.write_line("}");
-                w.write_line(r#"buf.push('}');"#);
-            })
+            w.def_fn(
+                "fmt(&self, name: &str, buf: &mut ::std::string::String)",
+                |w| {
+                    if normal_fields.is_empty() && oneofs.is_empty() {
+                        return;
+                    }
+                    w.write_line(r#"::protobuf::push_message_start(name, buf);"#);
+                    w.write_line(r#"let old_len = buf.len();"#);
+                    for field in &normal_fields {
+                        w.write_line(&format!(
+                            "::protobuf::PbPrint::fmt(&self.{}, \"{}\", buf);",
+                            field.rust_name, field.unesc_rust_name
+                        ));
+                    }
+                    for oneof in &oneofs {
+                        w.write_line(&format!(
+                            "::protobuf::PbPrint::fmt(&self.{}, \"{}\", buf);",
+                            oneof.name(),
+                            oneof.name()
+                        ));
+                    }
+                    w.write_line("if old_len < buf.len() {");
+                    w.write_line("  buf.push(' ');");
+                    w.write_line("}");
+                    w.write_line(r#"buf.push('}');"#);
+                },
+            )
         });
 
         w.impl_for_block("::std::fmt::Debug", &self.type_name, |w| {
@@ -435,10 +490,17 @@ impl<'a> MessageGen<'a> {
                     }
                     w.write_line("let mut s = ::std::string::String::new();");
                     for field in &normal_fields {
-                        w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);", field.rust_name, field.unesc_rust_name));
+                        w.write_line(&format!(
+                            "::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);",
+                            field.rust_name, field.unesc_rust_name
+                        ));
                     }
                     for oneof in &oneofs {
-                        w.write_line(&format!("::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);", oneof.name(), oneof.name()));
+                        w.write_line(&format!(
+                            "::protobuf::PbPrint::fmt(&self.{}, \"{}\", &mut s);",
+                            oneof.name(),
+                            oneof.name()
+                        ));
                     }
                     w.write_line(r#"write!(f, "{}", s)"#);
                 },

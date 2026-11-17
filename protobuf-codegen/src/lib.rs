@@ -1,5 +1,5 @@
-extern crate protobuf;
 extern crate heck;
+extern crate protobuf;
 
 use std::collections::hash_map::HashMap;
 use std::fmt::Write as FmtWrite;
@@ -134,6 +134,7 @@ fn gen_file(
 
     let scope = FileScope {
         file_descriptor: file,
+        prost_style: customize.prost_style.unwrap_or(true),
     }
     .to_scope();
     let lite_runtime = customize.lite_runtime.unwrap_or_else(|| {
@@ -198,6 +199,7 @@ pub fn gen(
 ) -> Vec<compiler_plugin::GenResult> {
     let root_scope = RootScope {
         file_descriptors: file_descriptors,
+        prost_style: customize.prost_style.unwrap_or(true),
     };
 
     let mut results: Vec<compiler_plugin::GenResult> = Vec::new();
@@ -257,4 +259,66 @@ fn generated_any_methods_support_rust_2015() {
     assert!(code.contains("fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any)"));
     assert!(code.contains("self as &mut dyn (::std::any::Any)"));
     assert!(code.contains("Box<dyn (::std::any::Any)>"));
+}
+
+#[test]
+fn naming_and_pb_print_options_are_independent() {
+    let mut file = FileDescriptorProto::new();
+    file.set_name("options.proto".to_owned());
+    let mut message = protobuf::descriptor::DescriptorProto::new();
+    message.set_name("example_message".to_owned());
+    file.mut_message_type().push(message);
+
+    for &prost_style in &[false, true] {
+        for &generate_pb_print in &[false, true] {
+            let customize = Customize {
+                prost_style: Some(prost_style),
+                generate_pb_print: Some(generate_pb_print),
+                ..Default::default()
+            };
+            let generated = gen(&[file.clone()], &["options.proto".to_owned()], &customize);
+            let code = ::std::str::from_utf8(&generated[0].content).unwrap();
+            let name = if prost_style {
+                "ExampleMessage"
+            } else {
+                "example_message"
+            };
+            assert!(code.contains(&format!("pub struct {}", name)));
+            assert_eq!(
+                code.contains(&format!("impl ::protobuf::PbPrint for {}", name)),
+                generate_pb_print
+            );
+            assert_eq!(
+                code.contains("::protobuf::text_format::fmt(self, f)"),
+                !generate_pb_print
+            );
+        }
+    }
+}
+
+#[test]
+fn file_options_and_plugin_parameters_are_parsed() {
+    let extensions = protobuf::rustproto::file_descriptor_proto().get_extension();
+    assert!(extensions.iter().any(|e| e.get_name() == "prost_style_all" && e.get_number() == 18000));
+    assert!(extensions.iter().any(|e| e.get_name() == "generate_pb_print_all" && e.get_number() == 18001));
+    let customize =
+        Customize::parse_from_parameter("prost_style=false generate_pb_print=false").unwrap();
+    assert_eq!(customize.prost_style, Some(false));
+    assert_eq!(customize.generate_pb_print, Some(false));
+
+    let mut file = FileDescriptorProto::new();
+    file.set_name("options.proto".to_owned());
+    file.mut_options().mut_unknown_fields().add_varint(18000, 0);
+    file.mut_options().mut_unknown_fields().add_varint(18001, 0);
+    let mut message = protobuf::descriptor::DescriptorProto::new();
+    message.set_name("example_message".to_owned());
+    file.mut_message_type().push(message);
+    let generated = gen(
+        &[file],
+        &["options.proto".to_owned()],
+        &Customize::default(),
+    );
+    let code = ::std::str::from_utf8(&generated[0].content).unwrap();
+    assert!(code.contains("pub struct example_message"));
+    assert!(!code.contains("impl ::protobuf::PbPrint for example_message"));
 }

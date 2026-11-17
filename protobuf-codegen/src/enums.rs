@@ -12,13 +12,19 @@ use serde;
 pub struct EnumValueGen {
     proto: EnumValueDescriptorProto,
     enum_rust_name: String,
+    prost_style: bool,
 }
 
 impl EnumValueGen {
-    fn parse(proto: &EnumValueDescriptorProto, enum_rust_name: &str) -> EnumValueGen {
+    fn parse(
+        proto: &EnumValueDescriptorProto,
+        enum_rust_name: &str,
+        prost_style: bool,
+    ) -> EnumValueGen {
         EnumValueGen {
             proto: proto.clone(),
             enum_rust_name: enum_rust_name.to_string(),
+            prost_style,
         }
     }
 
@@ -29,7 +35,7 @@ impl EnumValueGen {
 
     // name of enum variant in generated rust code
     fn rust_name_inner(&self) -> String {
-        self.proto.rust_name()
+        self.proto.rust_name_with_style(self.prost_style)
     }
 
     pub fn rust_name_outer(&self) -> String {
@@ -92,7 +98,11 @@ impl<'a> EnumGen<'a> {
     fn values_all(&self) -> Vec<EnumValueGen> {
         let mut r = Vec::new();
         for p in self.enum_with_scope.values() {
-            r.push(EnumValueGen::parse(p, &self.type_name));
+            r.push(EnumValueGen::parse(
+                p,
+                &self.type_name,
+                self.enum_with_scope.scope.file_scope.prost_style,
+            ));
         }
         r
     }
@@ -106,14 +116,22 @@ impl<'a> EnumGen<'a> {
             if !used.insert(p.get_number()) {
                 continue;
             }
-            r.push(EnumValueGen::parse(p, &self.type_name));
+            r.push(EnumValueGen::parse(
+                p,
+                &self.type_name,
+                self.enum_with_scope.scope.file_scope.prost_style,
+            ));
         }
         r
     }
 
     // find enum value by name
     pub fn value_by_name(&'a self, name: &str) -> EnumValueGen {
-        EnumValueGen::parse(self.enum_with_scope.value_by_name(name), &self.type_name)
+        EnumValueGen::parse(
+            self.enum_with_scope.value_by_name(name),
+            &self.type_name,
+            self.enum_with_scope.scope.file_scope.prost_style,
+        )
     }
 
     pub fn write(&self, w: &mut CodeWriter) {
@@ -129,7 +147,9 @@ impl<'a> EnumGen<'a> {
         w.write_line("");
         self.write_impl_copy(w);
         w.write_line("");
-        self.write_impl_show(w);
+        if self.customize.generate_pb_print.unwrap_or(true) {
+            self.write_impl_show(w);
+        }
         w.write_line("");
         self.write_impl_default(w);
         w.write_line("");
@@ -138,14 +158,17 @@ impl<'a> EnumGen<'a> {
 
     fn write_impl_show(&self, w: &mut CodeWriter) {
         w.impl_for_block("::protobuf::PbPrint", &self.type_name, |w| {
-            w.def_fn("fmt(&self, name: &str, buf: &mut ::std::string::String)", |w| {
-                w.write_line("use std::fmt::Write;");
-                w.write_line(&format!("if *self == {}::default() {{", self.type_name));
-                w.write_line("    return;");
-                w.write_line("}");
-                w.write_line(r#"::protobuf::push_field_start(name, buf);"#);
-                w.write_line(r#"write!(buf, "{:?}", self).unwrap();"#);
-            })
+            w.def_fn(
+                "fmt(&self, name: &str, buf: &mut ::std::string::String)",
+                |w| {
+                    w.write_line("use std::fmt::Write;");
+                    w.write_line(&format!("if *self == {}::default() {{", self.type_name));
+                    w.write_line("    return;");
+                    w.write_line("}");
+                    w.write_line(r#"::protobuf::push_field_start(name, buf);"#);
+                    w.write_line(r#"write!(buf, "{:?}", self).unwrap();"#);
+                },
+            )
         });
     }
 
@@ -232,8 +255,12 @@ impl<'a> EnumGen<'a> {
                 w.write_line("");
                 w.def_fn(&format!("enum_descriptor_static() -> &'static ::protobuf::reflect::EnumDescriptor"), |w| {
                     w.lazy_static_decl_get("descriptor", "::protobuf::reflect::EnumDescriptor", |w| {
-                        let ref type_name = self.type_name;
-                        w.write_line(&format!("::protobuf::reflect::EnumDescriptor::new(\"{}\", file_descriptor_proto())", type_name));
+                        let descriptor_name = if self.enum_with_scope.scope.file_scope.prost_style {
+                            self.type_name.clone()
+                        } else {
+                            format!(".{}", self.enum_with_scope.name_to_package())
+                        };
+                        w.write_line(&format!("::protobuf::reflect::EnumDescriptor::new(\"{}\", file_descriptor_proto())", descriptor_name));
                     });
                 });
             }
@@ -288,7 +315,8 @@ impl<'a> EnumGen<'a> {
                 w.write_line(&format!(
                     "{}::{}",
                     &self.type_name,
-                    &first_value.rust_name()
+                    &first_value
+                        .rust_name_with_style(self.enum_with_scope.scope.file_scope.prost_style)
                 ))
             });
         });

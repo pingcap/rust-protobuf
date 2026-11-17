@@ -346,7 +346,10 @@ fn field_elem(
                     FieldElem::Enum(
                         rust_relative_name,
                         file_name,
-                        RustIdent(enum_with_scope.values()[0].rust_name().to_owned()),
+                        RustIdent(
+                            enum_with_scope.values()[0]
+                                .rust_name_with_style(enum_with_scope.scope.file_scope.prost_style),
+                        ),
                     ),
                     Some(ev),
                 )
@@ -473,8 +476,12 @@ impl<'a> FieldGen<'a> {
         FieldGen {
             root_scope: root_scope,
             syntax: field.message.get_scope().file_scope.syntax(),
-            rust_name: field.field.rust_name(),
-            unesc_rust_name: field.field.unesc_rust_name(),
+            rust_name: field.field.rust_name_with_style(field.message.scope.file_scope.prost_style),
+            unesc_rust_name: if field.message.scope.file_scope.prost_style {
+                field.field.unesc_rust_name()
+            } else {
+                field.field.rust_name_with_style(false)
+            },
             proto_type: field.field.get_field_type(),
             wire_type: field_type_wire_type(field.field.get_field_type()),
             enum_default_value: enum_default_value,
@@ -559,7 +566,11 @@ impl<'a> FieldGen<'a> {
         format!(
             "{}::{}",
             self.oneof().oneof_type_name.to_code(&self.customize),
-            camel_case(&self.rust_name),
+            if self.customize.prost_style.unwrap_or(true) {
+                camel_case(&self.rust_name)
+            } else {
+                self.rust_name.clone()
+            },
         )
     }
 
@@ -1126,7 +1137,11 @@ impl<'a> FieldGen<'a> {
                 let cond = format!(
                     "Some({}::{}(ref {}))",
                     oneof_type_name.to_code(&self.customize),
-                    camel_case(&self.rust_name),
+                    if self.customize.prost_style.unwrap_or(true) {
+                        camel_case(&self.rust_name)
+                    } else {
+                        self.rust_name.clone()
+                    },
                     varn
                 );
                 w.if_let_stmt(&cond, &self.self_field_oneof(), |w| {
