@@ -8,11 +8,15 @@ use protobuf::{
 };
 
 fn assert_limit<T>(result: ProtobufResult<T>) {
-    match result {
-        Err(ProtobufError::WireError(WireError::OverRecursionLimit)) => (),
-        Err(e) => panic!("expected recursion limit error, got {:?}", e),
-        Ok(_) => panic!("expected recursion limit error"),
-    }
+    let error = result.err();
+    assert!(
+        matches!(
+            error,
+            Some(ProtobufError::WireError(WireError::OverRecursionLimit))
+        ),
+        "expected recursion limit error, got {:?}",
+        error
+    );
 }
 
 // Each layer is Struct.fields -> map entry value -> Value.struct_value -> Struct.
