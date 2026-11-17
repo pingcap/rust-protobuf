@@ -14,5 +14,6 @@ protobuf-bin-gen-rust
 protoc-gen-rust
 target/
 Cargo.lock
+!ci/kvproto-compat/Cargo.lock
 .idea
 *.iml

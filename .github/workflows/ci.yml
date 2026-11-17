@@ -60,3 +60,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: Check grpcio-compiler against this protobuf
         run: cargo check --manifest-path ci/grpcio-compiler-compat/Cargo.toml
+
+  kvproto:
+    name: kvproto compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check TiKV's kvproto against this protobuf
+        run: cargo check --locked --manifest-path ci/kvproto-compat/Cargo.toml
