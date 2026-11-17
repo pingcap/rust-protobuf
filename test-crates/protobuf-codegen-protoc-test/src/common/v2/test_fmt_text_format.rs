@@ -206,23 +206,25 @@ fn test_parse_error() {
 
 #[test]
 fn test_recursion_limit_rejects_deeply_nested_messages() {
-    let parse_options = protobuf::text_format::ParseOptions {
-        recursion_limit: 3,
-        ..Default::default()
-    };
+    for limit in [0, 1, 3] {
+        let parse_options = protobuf::text_format::ParseOptions {
+            recursion_limit: limit,
+            ..Default::default()
+        };
 
-    for delimiters in [('{', '}'), ('<', '>')] {
-        protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
-            &nested_text_message(3, delimiters),
-            &parse_options,
-        )
-        .unwrap();
-        let error = protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
-            &nested_text_message(4, delimiters),
-            &parse_options,
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("Recursion limit exceeded"));
+        for delimiters in [('{', '}'), ('<', '>')] {
+            protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
+                &nested_text_message(limit as usize, delimiters),
+                &parse_options,
+            )
+            .unwrap();
+            let error = protobuf::text_format::parse_from_str_with_options::<RecursiveMessage>(
+                &nested_text_message(limit as usize + 1, delimiters),
+                &parse_options,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("Recursion limit exceeded"));
+        }
     }
 
     let shallow_text = "children {} ".repeat(10);

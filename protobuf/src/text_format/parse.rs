@@ -322,6 +322,11 @@ impl<'a> Parser<'a> {
 pub struct ParseOptions {
     /// Maximum recursive nesting depth accepted by the parser.
     ///
+    /// The root message starts at depth zero. Each nested message value
+    /// consumes one level; map entry wrappers do not add another level.
+    /// A depth equal to the limit is accepted; zero rejects nested message
+    /// values while allowing scalar values, including those in maps.
+    ///
     /// Defaults to 100. Large values may exhaust the call stack.
     pub recursion_limit: u32,
     /// Prevent initializing `ParseOptions` by enumerating all fields.

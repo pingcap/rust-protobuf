@@ -104,6 +104,19 @@ fn test_value_recursion_limit_rejects_deeply_nested_containers() {
     )
     .unwrap_err();
     assert!(error.to_string().contains("Recursion limit exceeded"));
+
+    // The enclosing message field and Value containers share one budget.
+    protobuf_json_mapping::parse_from_str_with_options::<TestFmtJsonWellKnownTypes>(
+        &format!(r#"{{"value":{}}}"#, nested_value_json(2)),
+        &parse_options,
+    )
+    .unwrap();
+    let error = protobuf_json_mapping::parse_from_str_with_options::<TestFmtJsonWellKnownTypes>(
+        &format!(r#"{{"value":{}}}"#, nested_value_json(3)),
+        &parse_options,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("Recursion limit exceeded"));
 }
 
 #[test]

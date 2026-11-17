@@ -345,22 +345,24 @@ fn test_ignore_unknown_fields() {
 
 #[test]
 fn test_recursion_limit_rejects_deeply_nested_messages() {
-    let parse_options = protobuf_json_mapping::ParseOptions {
-        recursion_limit: 3,
-        ..Default::default()
-    };
+    for limit in [0, 1, 3] {
+        let parse_options = protobuf_json_mapping::ParseOptions {
+            recursion_limit: limit,
+            ..Default::default()
+        };
 
-    protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
-        &nested_message_json(3),
-        &parse_options,
-    )
-    .unwrap();
-    let error = protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
-        &nested_message_json(4),
-        &parse_options,
-    )
-    .unwrap_err();
-    assert!(error.to_string().contains("Recursion limit exceeded"));
+        protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+            &nested_message_json(limit as usize),
+            &parse_options,
+        )
+        .unwrap();
+        let error = protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+            &nested_message_json(limit as usize + 1),
+            &parse_options,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("Recursion limit exceeded"));
+    }
 
     let shallow_children = ["{}"; 10].join(",");
     let shallow_json = format!(r#"{{"children":[{shallow_children}]}}"#);
@@ -389,17 +391,30 @@ fn test_recursion_limit_applies_to_ignored_unknown_fields() {
         ..Default::default()
     };
 
-    protobuf_json_mapping::parse_from_str_with_options::<TestTypes>(
-        r#"{"unknown":[[0]]}"#,
-        &parse_options,
-    )
-    .unwrap();
-    let error = protobuf_json_mapping::parse_from_str_with_options::<TestTypes>(
-        r#"{"unknown":[[[0]]]}"#,
-        &parse_options,
-    )
-    .unwrap_err();
-    assert!(error.to_string().contains("Recursion limit exceeded"));
+    for (accepted, rejected) in [
+        (r#"{"unknown":[[0]]}"#, r#"{"unknown":[[[0]]]}"#),
+        (
+            r#"{"unknown":{"nested":[0]}}"#,
+            r#"{"unknown":{"nested":[[0]]}}"#,
+        ),
+        // Known messages and skipped containers share the same depth budget.
+        (
+            r#"{"child":{"unknown":[0]}}"#,
+            r#"{"child":{"unknown":[[0]]}}"#,
+        ),
+    ] {
+        protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+            accepted,
+            &parse_options,
+        )
+        .unwrap();
+        let error = protobuf_json_mapping::parse_from_str_with_options::<RecursiveMessage>(
+            rejected,
+            &parse_options,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("Recursion limit exceeded"));
+    }
 }
 
 #[test]

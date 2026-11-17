@@ -884,6 +884,12 @@ pub struct ParseOptions {
     pub ignore_unknown_fields: bool,
     /// Maximum recursive nesting depth accepted by the parser.
     ///
+    /// The root message starts at depth zero. Each nested message field and
+    /// each array or object inside a `google.protobuf.Value` or an ignored
+    /// unknown field consumes one level from the same budget. Containers for
+    /// repeated fields and maps do not consume an additional level.
+    /// A depth equal to the limit is accepted; zero allows no such nesting.
+    ///
     /// Defaults to 100. Large values may exhaust the call stack.
     pub recursion_limit: u32,
     /// Prevent initializing `ParseOptions` enumerating all field.
