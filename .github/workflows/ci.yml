@@ -55,7 +55,8 @@ jobs:
 
   kvproto:
     name: kvproto compatibility
-    runs-on: ubuntu-latest
+    # grpcio 0.10's bundled gRPC does not compile with newer GCC versions.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
       - name: Check TiKV's kvproto against this protobuf
