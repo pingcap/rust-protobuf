@@ -1,0 +1,22 @@
+[package]
+name = "kvproto-compat"
+version = "0.0.0"
+edition = "2018"
+publish = false
+
+[workspace]
+
+[dependencies]
+# The revision and raft-proto patch match TiKV master's Cargo.lock.
+kvproto = { git = "https://github.com/pingcap/kvproto.git", rev = "f8ad079c8e9812ed5900b0c12b5f1d97171464c4" }
+grpcio = { version = "=0.10.4", default-features = false, features = ["protobuf-codec"] }
+protobuf = { path = "../../protobuf", features = ["bytes"] }
+
+[build-dependencies]
+grpcio-compiler = "=0.10.4"
+protobuf-build = { version = "=0.15.1", default-features = false, features = ["grpcio-protobuf-codec"] }
+
+[patch.crates-io]
+protobuf = { path = "../../protobuf" }
+protobuf-codegen = { path = "../../protobuf-codegen" }
+raft-proto = { git = "https://github.com/tikv/raft-rs", rev = "ad13f3d90780f53aea2488c6a4b76c0d334bf136" }

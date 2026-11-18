@@ -301,7 +301,9 @@ pub trait WithScope<'a> {
     // message or enum name
     fn get_name(&self) -> &'a str;
 
-    fn escape_prefix(&self) -> &'static str { "r#" }
+    fn escape_prefix(&self) -> &'static str {
+        "r#"
+    }
 
     fn name_to_package(&self) -> String {
         let mut r = self.get_scope().prefix();
@@ -324,6 +326,14 @@ pub trait WithScope<'a> {
 
     fn rust_name(&self) -> String;
 
+    fn rust_name_with_style(&self, prost_style: bool) -> String {
+        if prost_style {
+            self.rust_name()
+        } else {
+            self.legacy_rust_name()
+        }
+    }
+
     // rust type name of this descriptor without escaping
     fn unesc_rust_name(&self) -> String {
         let mut r = self.get_scope().rust_prefix();
@@ -340,6 +350,18 @@ pub trait WithScope<'a> {
         }
         r.push_str(self.get_name());
         r
+    }
+
+    fn legacy_rust_name(&self) -> String {
+        let mut name = self.get_scope().rust_prefix();
+        if name.is_empty() && rust::is_rust_keyword(self.get_name()) {
+            name.push_str(match self.escape_prefix() {
+                "r#" => "message_",
+                prefix => prefix,
+            });
+        }
+        name.push_str(self.get_name());
+        name
     }
 
     // fully-qualified name of this type
@@ -454,20 +476,39 @@ impl<'a> EnumWithScope<'a> {
 
 pub trait EnumValueDescriptorEx {
     fn rust_name(&self) -> String;
+    fn rust_name_with_style(&self, _prost_style: bool) -> String {
+        self.rust_name()
+    }
 }
 
 impl EnumValueDescriptorEx for EnumValueDescriptorProto {
     fn rust_name(&self) -> String {
+        self.rust_name_with_style(true)
+    }
+
+    fn rust_name_with_style(&self, prost_style: bool) -> String {
         let mut r = String::new();
         if rust::is_rust_keyword(self.get_name()) {
-            r.push_str("r#");
+            r.push_str(if prost_style { "r#" } else { "value_" });
         }
         r.push_str(self.get_name());
-        camel_case(&r)
+        if prost_style {
+            camel_case(&r)
+        } else {
+            r
+        }
     }
 }
 
 impl<'a> WithScope<'a> for EnumWithScope<'a> {
+    fn legacy_rust_name(&self) -> String {
+        let mut name = self.get_scope().rust_prefix();
+        if name.is_empty() && rust::is_rust_keyword(self.get_name()) {
+            name.push_str("enum_");
+        }
+        name.push_str(self.get_name());
+        name
+    }
     fn get_scope(&self) -> &Scope<'a> {
         &self.scope
     }
@@ -507,15 +548,36 @@ impl<'a> WithScope<'a> for MessageOrEnumWithScope<'a> {
             &MessageOrEnumWithScope::Enum(ref e) => e.rust_name(),
         }
     }
+
+    fn legacy_rust_name(&self) -> String {
+        match self {
+            &MessageOrEnumWithScope::Message(ref m) => m.legacy_rust_name(),
+            &MessageOrEnumWithScope::Enum(ref e) => e.legacy_rust_name(),
+        }
+    }
 }
 
 pub trait FieldDescriptorProtoExt {
     fn rust_name(&self) -> String;
     fn unesc_rust_name(&self) -> String;
+    fn rust_name_with_style(&self, _prost_style: bool) -> String {
+        self.rust_name()
+    }
 }
 
 impl FieldDescriptorProtoExt for FieldDescriptorProto {
     fn rust_name(&self) -> String {
+        self.rust_name_with_style(true)
+    }
+
+    fn rust_name_with_style(&self, prost_style: bool) -> String {
+        if !prost_style {
+            return if rust::is_rust_keyword(self.get_name()) {
+                format!("field_{}", self.get_name())
+            } else {
+                self.get_name().to_string()
+            };
+        }
         snake_case(&if rust::is_rust_keyword(self.get_name()) {
             format!("r#{}", self.get_name())
         } else {
@@ -600,9 +662,17 @@ impl<'a> OneofWithContext<'a> {
 
     /// rust type name of enum
     pub fn rust_name(&self) -> String {
+        self.rust_name_with_style(true)
+    }
+
+    pub fn rust_name_with_style(&self, prost_style: bool) -> String {
         format!(
             "{}_oneof_{}",
-            self.message.unesc_rust_name(),
+            if prost_style {
+                self.message.unesc_rust_name()
+            } else {
+                self.message.legacy_rust_name()
+            },
             self.oneof.get_name()
         )
     }
@@ -626,13 +696,21 @@ pub fn find_message_by_rust_name<'a>(
     fd: &'a FileDescriptorProto,
     rust_name: &str,
 ) -> MessageWithScope<'a> {
-    FileScope {
+    let messages = FileScope {
         file_descriptor: fd,
     }
-    .find_messages()
-    .into_iter()
-    .find(|m| m.rust_name() == rust_name)
-    .unwrap()
+    .find_messages();
+    if rust_name.starts_with('.') {
+        messages.into_iter()
+            .find(|m| m.name_to_package() == rust_name[1..])
+            .unwrap()
+    } else {
+        // Prefer the default naming style across all descriptors before
+        // trying legacy names, which can collide with a default name.
+        messages.iter().find(|m| m.rust_name() == rust_name)
+            .or_else(|| messages.iter().find(|m| m.legacy_rust_name() == rust_name))
+            .unwrap().clone()
+    }
 }
 
 /// Find enum by rust type name
@@ -640,13 +718,19 @@ pub fn find_enum_by_rust_name<'a>(
     fd: &'a FileDescriptorProto,
     rust_name: &str,
 ) -> EnumWithScope<'a> {
-    FileScope {
+    let enums = FileScope {
         file_descriptor: fd,
     }
-    .find_enums()
-    .into_iter()
-    .find(|e| e.rust_name() == rust_name)
-    .unwrap()
+    .find_enums();
+    if rust_name.starts_with('.') {
+        enums.into_iter()
+            .find(|e| e.name_to_package() == rust_name[1..])
+            .unwrap()
+    } else {
+        enums.iter().find(|e| e.rust_name() == rust_name)
+            .or_else(|| enums.iter().find(|e| e.legacy_rust_name() == rust_name))
+            .unwrap().clone()
+    }
 }
 
 #[cfg(test)]

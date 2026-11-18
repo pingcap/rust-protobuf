@@ -25,6 +25,12 @@ extend google.protobuf.FileOptions {
 
     // When true, will only generate codes that works with lite runtime.
     optional bool lite_runtime_all = 17035;
+
+    // Use Prost-style Rust identifiers instead of legacy rust-protobuf names.
+    // Defaults to true when unset.
+    optional bool prost_style_all = 18000;
+    // Generate PbPrint and redacting Debug implementations. Defaults to true.
+    optional bool generate_pb_print_all = 18001;
 }
 
 extend google.protobuf.MessageOptions {

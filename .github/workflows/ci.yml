@@ -52,3 +52,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Test tooling
         run: cargo test -p protobuf-codegen -p protobuf-codegen-pure -p protoc -p protoc-rust
+
+  kvproto:
+    name: kvproto compatibility
+    # grpcio 0.10's bundled gRPC does not compile with newer GCC versions.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check TiKV's kvproto against this protobuf
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+        run: cargo check --locked --manifest-path ci/kvproto-compat/Cargo.toml

@@ -4,6 +4,7 @@ use protobuf::rt;
 use protobuf::rust;
 use protobuf::text_format;
 use protobuf::wire_format;
+use CodegenRootScope;
 
 use super::code_writer::CodeWriter;
 use super::enums::*;
@@ -287,7 +288,7 @@ impl FieldElem {
 
 fn field_elem(
     field: &FieldWithContext,
-    root_scope: &RootScope,
+    root_scope: &CodegenRootScope,
     parse_map: bool,
     customize: &Customize,
 ) -> (FieldElem, Option<EnumValueGen>) {
@@ -346,7 +347,9 @@ fn field_elem(
                     FieldElem::Enum(
                         rust_relative_name,
                         file_name,
-                        RustIdent(enum_with_scope.values()[0].rust_name().to_owned()),
+                        RustIdent(enum_with_scope.values()[0].rust_name_with_style(
+                            root_scope.prost_style_for_file(enum_with_scope.get_file_descriptor()),
+                        )),
                     ),
                     Some(ev),
                 )
@@ -406,7 +409,7 @@ impl AccessorFn {
 
 #[derive(Clone)]
 pub struct FieldGen<'a> {
-    root_scope: &'a RootScope<'a>,
+    root_scope: &'a CodegenRootScope<'a>,
     syntax: Syntax,
     pub proto_field: FieldWithContext<'a>,
     // field name in generated code
@@ -424,7 +427,7 @@ pub struct FieldGen<'a> {
 impl<'a> FieldGen<'a> {
     pub fn parse(
         field: FieldWithContext<'a>,
-        root_scope: &'a RootScope<'a>,
+        root_scope: &'a CodegenRootScope<'a>,
         customize: &Customize,
     ) -> FieldGen<'a> {
         let mut customize = customize.clone();
@@ -456,7 +459,13 @@ impl<'a> FieldGen<'a> {
                 }),
             }
         } else if let Some(oneof) = field.oneof() {
-            FieldKind::Oneof(OneofField::parse(&oneof, &field, elem, root_scope))
+            FieldKind::Oneof(OneofField::parse(
+                &oneof,
+                &field,
+                elem,
+                root_scope,
+                customize.prost_style.unwrap_or(true),
+            ))
         } else {
             let flag = if field.message.scope.file_scope.syntax() == Syntax::PROTO3
                 && field.field.get_field_type() != FieldDescriptorProto_Type::TYPE_MESSAGE
@@ -473,8 +482,14 @@ impl<'a> FieldGen<'a> {
         FieldGen {
             root_scope: root_scope,
             syntax: field.message.get_scope().file_scope.syntax(),
-            rust_name: field.field.rust_name(),
-            unesc_rust_name: field.field.unesc_rust_name(),
+            rust_name: field
+                .field
+                .rust_name_with_style(customize.prost_style.unwrap_or(true)),
+            unesc_rust_name: if customize.prost_style.unwrap_or(true) {
+                field.field.unesc_rust_name()
+            } else {
+                field.field.rust_name_with_style(false)
+            },
             proto_type: field.field.get_field_type(),
             wire_type: field_type_wire_type(field.field.get_field_type()),
             enum_default_value: enum_default_value,
@@ -559,7 +574,11 @@ impl<'a> FieldGen<'a> {
         format!(
             "{}::{}",
             self.oneof().oneof_type_name.to_code(&self.customize),
-            camel_case(&self.rust_name),
+            if self.customize.prost_style.unwrap_or(true) {
+                camel_case(&self.rust_name)
+            } else {
+                self.rust_name.clone()
+            },
         )
     }
 
@@ -1126,7 +1145,11 @@ impl<'a> FieldGen<'a> {
                 let cond = format!(
                     "Some({}::{}(ref {}))",
                     oneof_type_name.to_code(&self.customize),
-                    camel_case(&self.rust_name),
+                    if self.customize.prost_style.unwrap_or(true) {
+                        camel_case(&self.rust_name)
+                    } else {
+                        self.rust_name.clone()
+                    },
                     varn
                 );
                 w.if_let_stmt(&cond, &self.self_field_oneof(), |w| {

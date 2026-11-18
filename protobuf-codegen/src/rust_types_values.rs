@@ -1,4 +1,5 @@
 use std::cmp;
+use CodegenRootScope;
 
 use super::well_known_types::is_well_known_type_full;
 use ident::RustIdent;
@@ -478,7 +479,7 @@ pub fn type_name_to_rust_relative(
     type_name: &str,
     file: &FileDescriptorProto,
     subm: bool,
-    root_scope: &RootScope,
+    root_scope: &CodegenRootScope,
 ) -> String {
     assert!(
         type_name.starts_with("."),
@@ -486,12 +487,16 @@ pub fn type_name_to_rust_relative(
         type_name
     );
     let message_or_enum = root_scope.find_message_or_enum(type_name);
+    let prost_style = root_scope.prost_style_for_file(message_or_enum.get_file_descriptor());
     if message_or_enum.get_scope().get_file_descriptor().get_name() == file.get_name() {
         // field type is a message or enum declared in the same file
         if subm {
-            format!("super::{}", message_or_enum.rust_name())
+            format!(
+                "super::{}",
+                message_or_enum.rust_name_with_style(prost_style)
+            )
         } else {
-            format!("{}", message_or_enum.rust_name())
+            format!("{}", message_or_enum.rust_name_with_style(prost_style))
         }
     } else if let Some(name) = is_well_known_type_full(type_name) {
         // Well-known types are included in rust-protobuf library
@@ -504,10 +509,15 @@ pub fn type_name_to_rust_relative(
             message_or_enum.name_to_package()
         )
     } else {
+        let name = format!(
+            "{}::{}",
+            proto_path_to_rust_mod(message_or_enum.get_file_descriptor().get_name()),
+            message_or_enum.rust_name_with_style(prost_style)
+        );
         if subm {
-            format!("super::super::{}", message_or_enum.rust_fq_name())
+            format!("super::super::{}", name)
         } else {
-            format!("super::{}", message_or_enum.rust_fq_name())
+            format!("super::{}", name)
         }
     }
 }

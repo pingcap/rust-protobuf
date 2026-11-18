@@ -7,10 +7,11 @@ use message::MessageGen;
 use protobuf::descriptor::FieldDescriptorProto_Type;
 use protobuf::descriptorx::OneofWithContext;
 use protobuf::descriptorx::WithScope;
-use protobuf::descriptorx::{camel_case, FieldWithContext, OneofVariantWithContext, RootScope};
+use protobuf::descriptorx::{camel_case, FieldWithContext, OneofVariantWithContext};
 use rust_types_values::RustType;
 use serde;
 use std::collections::HashSet;
+use CodegenRootScope;
 use Customize;
 
 // oneof one { ... }
@@ -26,7 +27,11 @@ impl OneofField {
     // Detecting recursion: if oneof fields contains a self-reference
     // or another message which has a reference to self,
     // put oneof variant into a box.
-    fn need_boxed(field: &FieldWithContext, root_scope: &RootScope, owner_name: &str) -> bool {
+    fn need_boxed(
+        field: &FieldWithContext,
+        root_scope: &CodegenRootScope,
+        owner_name: &str,
+    ) -> bool {
         let mut visited_messages = HashSet::new();
         let mut fields = vec![field.clone()];
         while let Some(field) = fields.pop() {
@@ -49,14 +54,15 @@ impl OneofField {
         oneof: &OneofWithContext,
         field: &FieldWithContext,
         elem: FieldElem,
-        root_scope: &RootScope,
+        root_scope: &CodegenRootScope,
+        prost_style: bool,
     ) -> OneofField {
         let boxed = OneofField::need_boxed(field, root_scope, &oneof.message.name_absolute());
 
         OneofField {
             elem: elem,
             oneof_name: oneof.name().to_string(),
-            oneof_type_name: RustType::Oneof(oneof.rust_name()),
+            oneof_type_name: RustType::Oneof(oneof.rust_name_with_style(prost_style)),
             boxed: boxed,
         }
     }
@@ -87,24 +93,31 @@ impl<'a> OneofVariantGen<'a> {
         oneof: &'a OneofGen<'a>,
         variant: OneofVariantWithContext<'a>,
         field: &'a FieldGen,
-        _root_scope: &RootScope,
+        _root_scope: &CodegenRootScope,
         customize: Customize,
     ) -> OneofVariantGen<'a> {
         let mut field = field.clone();
-        field.rust_name = camel_case(&field.rust_name);
+        if customize.prost_style.unwrap_or(true) {
+            field.rust_name = camel_case(&field.rust_name);
+        }
         OneofVariantGen {
             oneof: oneof,
             variant: variant.clone(),
             path: format!(
                 "{}::{}",
                 oneof.type_name.to_code(&field.customize),
-                camel_case(&field.rust_name)
+                if customize.prost_style.unwrap_or(true) {
+                    camel_case(&field.rust_name)
+                } else {
+                    field.rust_name.clone()
+                }
             ),
             oneof_field: OneofField::parse(
                 variant.oneof,
                 &field.proto_field,
                 field.oneof().elem.clone(),
                 oneof.message.root_scope,
+                customize.prost_style.unwrap_or(true),
             ),
             field,
             customize,
@@ -136,7 +149,7 @@ impl<'a> OneofGen<'a> {
         oneof: OneofWithContext<'a>,
         customize: &Customize,
     ) -> OneofGen<'a> {
-        let rust_name = oneof.rust_name();
+        let rust_name = oneof.rust_name_with_style(customize.prost_style.unwrap_or(true));
         OneofGen {
             message: message,
             oneof: oneof,
@@ -183,18 +196,27 @@ impl<'a> OneofGen<'a> {
     fn write_impl_show(&self, w: &mut CodeWriter) {
         let type_name = self.type_name.to_code(&self.customize);
         w.impl_for_block("::protobuf::PbPrint", &type_name, |w| {
-            w.def_fn("fmt(&self, name: &str, buf: &mut ::std::string::String)", |w| {
-                w.write_line("match self {");
-                for variant in self.variants_except_group() {
-                    w.write_line(&format!("    {}::{}(v) => ::protobuf::PbPrint::fmt(v, name, buf),", type_name, variant.field.rust_name));
-                }
-                w.write_line("}");
-            })
+            w.def_fn(
+                "fmt(&self, name: &str, buf: &mut ::std::string::String)",
+                |w| {
+                    w.write_line("match self {");
+                    for variant in self.variants_except_group() {
+                        w.write_line(&format!(
+                            "    {}::{}(v) => ::protobuf::PbPrint::fmt(v, name, buf),",
+                            type_name, variant.field.rust_name
+                        ));
+                    }
+                    w.write_line("}");
+                },
+            )
         });
     }
 
     pub fn write_enum(&self, w: &mut CodeWriter) {
-        let derive = vec!["Clone", "PartialEq"];
+        let mut derive = vec!["Clone", "PartialEq"];
+        if !self.customize.generate_pb_print.unwrap_or(true) {
+            derive.push("Debug");
+        }
         w.derive(&derive);
         serde::write_serde_attr(w, &self.customize, "derive(Serialize, Deserialize)");
         w.pub_enum(&self.type_name.to_code(&self.customize), |w| {
@@ -207,6 +229,8 @@ impl<'a> OneofGen<'a> {
             }
         });
         w.write_line("");
-        self.write_impl_show(w);
+        if self.customize.generate_pb_print.unwrap_or(true) {
+            self.write_impl_show(w);
+        }
     }
 }

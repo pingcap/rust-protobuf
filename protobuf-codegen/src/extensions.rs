@@ -2,11 +2,12 @@ use super::code_writer::CodeWriter;
 use super::rust_types_values::*;
 use protobuf::descriptor::*;
 use protobuf::descriptorx::*;
+use CodegenRootScope;
 use Customize;
 
 struct ExtGen<'a> {
     file: &'a FileDescriptorProto,
-    root_scope: &'a RootScope<'a>,
+    root_scope: &'a CodegenRootScope<'a>,
     field: &'a FieldDescriptorProto,
     customize: Customize,
 }
@@ -54,7 +55,9 @@ impl<'a> ExtGen<'a> {
         };
         let field_type = format!("::protobuf::ext::ExtField{}", suffix);
         w.pub_const(
-            &self.field.rust_name(),
+            &self
+                .field
+                .rust_name_with_style(self.customize.prost_style.unwrap_or(true)),
             &format!(
                 "{}<{}, {}>",
                 field_type,
@@ -72,7 +75,7 @@ impl<'a> ExtGen<'a> {
 
 pub(crate) fn write_extensions(
     file: &FileDescriptorProto,
-    root_scope: &RootScope,
+    root_scope: &CodegenRootScope,
     w: &mut CodeWriter,
     customize: &Customize,
 ) {

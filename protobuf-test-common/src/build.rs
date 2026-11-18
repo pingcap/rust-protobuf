@@ -148,6 +148,11 @@ pub fn gen_in_dir_impl<F, E>(dir: &str, include_dir: &str, protoc3: bool, gen: F
         out_dir: dir,
         input: &protos.iter().map(|a| a.as_ref()).collect::<Vec<&str>>(),
         includes: &["../proto", include_dir],
+        customize: Customize {
+            prost_style: Some(false),
+            generate_pb_print: Some(false),
+            ..Default::default()
+        },
         .. Default::default()
     }).expect("protoc");
 

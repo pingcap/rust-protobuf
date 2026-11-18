@@ -25,6 +25,12 @@ pub struct Customize {
     /// Used internally to generate protos bundled in protobuf crate
     /// like `descriptor.proto`
     pub inside_protobuf: Option<bool>,
+    /// Use Prost-style names. Defaults to true for compatibility with this fork.
+    pub prost_style: Option<bool>,
+    /// Generate PbPrint and redacting Debug implementations. Defaults to true.
+    /// When disabled, Debug uses protobuf text format (or ordinary Debug for
+    /// lite-runtime messages) and does not use PbPrint redaction.
+    pub generate_pb_print: Option<bool>,
 
     // When adding more options please keep in sync with `parse_from_parameter` below.
     /// Make sure `Customize` is always used with `..Default::default()`
@@ -71,6 +77,12 @@ impl Customize {
         if let Some(v) = that.inside_protobuf {
             self.inside_protobuf = Some(v);
         }
+        if let Some(v) = that.prost_style {
+            self.prost_style = Some(v);
+        }
+        if let Some(v) = that.generate_pb_print {
+            self.generate_pb_print = Some(v);
+        }
     }
 
     /// Update unset fields of self with fields from other customize
@@ -115,6 +127,10 @@ impl Customize {
                 r.lite_runtime = Some(parse_bool(v)?);
             } else if n == "inside_protobuf" {
                 r.inside_protobuf = Some(parse_bool(v)?);
+            } else if n == "prost_style" {
+                r.prost_style = Some(parse_bool(v)?);
+            } else if n == "generate_pb_print" {
+                r.generate_pb_print = Some(parse_bool(v)?);
             } else {
                 return Err(CustomizeParseParameterError::UnknownOptionName(
                     n.to_owned(),
@@ -145,6 +161,8 @@ pub fn customize_from_rustproto_for_message(source: &MessageOptions) -> Customiz
         serde_derive_cfg,
         lite_runtime,
         inside_protobuf,
+        prost_style: None,
+        generate_pb_print: None,
         _future_options: (),
     }
 }
@@ -170,6 +188,8 @@ pub fn customize_from_rustproto_for_field(source: &FieldOptions) -> Customize {
         serde_derive_cfg,
         lite_runtime,
         inside_protobuf,
+        prost_style: None,
+        generate_pb_print: None,
         _future_options: (),
     }
 }
@@ -194,6 +214,8 @@ pub fn customize_from_rustproto_for_file(source: &FileOptions) -> Customize {
         serde_derive_cfg,
         lite_runtime,
         inside_protobuf,
+        prost_style: rustproto::exts::prost_style_all.get(source),
+        generate_pb_print: rustproto::exts::generate_pb_print_all.get(source),
         _future_options: (),
     }
 }
