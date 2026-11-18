@@ -6,16 +6,11 @@ use std::mem;
 use std::u64;
 
 #[cfg(feature = "bytes")]
-use bytes::BufMut;
-#[cfg(feature = "bytes")]
 use bytes::Bytes;
-#[cfg(feature = "bytes")]
-use bytes::BytesMut;
 
 use error::WireError;
 use ProtobufError;
 use ProtobufResult;
-use stream::READ_RAW_BYTES_MAX_ALLOC;
 
 
 // If an input stream is constructed with a `Read`, we create a
@@ -249,31 +244,12 @@ impl<'ignore> BufReadIter<'ignore> {
 
         target.clear();
 
-        if count >= READ_RAW_BYTES_MAX_ALLOC && count > target.capacity() {
-            // avoid calling `reserve` on buf with very large buffer: could be a malformed message
-
-            target.reserve(READ_RAW_BYTES_MAX_ALLOC);
-
-            while target.len() < count {
-                let need_to_read = count - target.len();
-                if need_to_read <= target.len() {
-                    target.reserve_exact(need_to_read);
-                } else {
-                    target.reserve(1);
-                }
-
-                let max = cmp::min(target.capacity() - target.len(), need_to_read);
-                let read = self.read_to_vec(target, max)?;
-                if read == 0 {
-                    return Err(ProtobufError::WireError(WireError::TruncatedMessage));
-                }
-            }
-        } else {
-            target.reserve_exact(count);
-
-            unsafe {
-                self.read_exact(&mut target.get_unchecked_mut(..count))?;
-                target.set_len(count);
+        // Grow only as bytes are received. This never creates a slice over
+        // uninitialized capacity, including on short reads or I/O errors.
+        while target.len() < count {
+            let read = self.read_to_vec(target, count - target.len())?;
+            if read == 0 {
+                return Err(ProtobufError::WireError(WireError::TruncatedMessage));
             }
         }
 
@@ -298,23 +274,9 @@ impl<'ignore> BufReadIter<'ignore> {
             self.pos_within_buf += len;
             Ok(r)
         } else {
-            if len >= READ_RAW_BYTES_MAX_ALLOC {
-                // We cannot trust `len` because protobuf message could be malformed.
-                // Reading should not result in OOM when allocating a buffer.
-                let mut v = Vec::new();
-                self.read_exact_to_vec(len, &mut v)?;
-                Ok(Bytes::from(v))
-            } else {
-                let mut r = BytesMut::with_capacity(len);
-                unsafe {
-                    let buf = std::slice::from_raw_parts_mut(r.as_mut_ptr(), len);
-                    self.read_exact(buf)?;
-                }
-                unsafe {
-                    r.advance_mut(len);
-                }
-                Ok(r.freeze())
-            }
+            let mut v = Vec::new();
+            self.read_exact_to_vec(len, &mut v)?;
+            Ok(Bytes::from(v))
         }
     }
 

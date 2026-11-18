@@ -38,7 +38,8 @@ const OUTPUT_STREAM_BUFFER_SIZE: usize = 8 * 1024;
 const DEFAULT_RECURSION_LIMIT: u32 = 100;
 
 /// Max allocated vec when reading length-delimited from unknown input stream
-pub(crate) const READ_RAW_BYTES_MAX_ALLOC: usize = 10_000_000;
+#[cfg(test)]
+const READ_RAW_BYTES_MAX_ALLOC: usize = 10_000_000;
 
 /// Serialization constants.
 pub mod wire_format {
@@ -714,41 +715,7 @@ impl<'a> CodedInputStream<'a> {
     /// Read raw bytes into the supplied vector.  The vector will be resized as needed and
     /// overwritten.
     pub fn read_raw_bytes_into(&mut self, count: u32, target: &mut Vec<u8>) -> ProtobufResult<()> {
-        if false {
-            // Master uses this version, but keep existing version for a while
-            // to avoid possible breakages.
-            return self.source.read_exact_to_vec(count as usize, target);
-        }
-
-        let count = count as usize;
-
-        // TODO: also do some limits when reading from unlimited source
-        if count as u64 > self.source.bytes_until_limit() {
-            return Err(ProtobufError::WireError(WireError::TruncatedMessage));
-        }
-
-        unsafe {
-            target.set_len(0);
-        }
-
-        if count >= READ_RAW_BYTES_MAX_ALLOC {
-            // avoid calling `reserve` on buf with very large buffer: could be a malformed message
-
-            let mut take = self.by_ref().take(count as u64);
-            take.read_to_end(target)?;
-
-            if target.len() != count {
-                return Err(ProtobufError::WireError(WireError::TruncatedMessage));
-            }
-        } else {
-            target.reserve(count);
-            unsafe {
-                target.set_len(count);
-            }
-
-            self.source.read_exact(target)?;
-        }
-        Ok(())
+        self.source.read_exact_to_vec(count as usize, target)
     }
 
     /// Read exact number of bytes
@@ -1574,6 +1541,33 @@ mod test {
         test_read("aa bb cc dd ee ff", |reader| {
             reader.skip_raw_bytes(6).unwrap();
         });
+    }
+
+    #[test]
+    fn truncated_raw_bytes_never_expose_uninitialized_data() {
+        let input = [1, 2];
+        let mut target = vec![9; 16];
+        let mut stream = CodedInputStream::from_bytes(&input);
+        assert!(stream.read_raw_bytes_into(8, &mut target).is_err());
+        assert_eq!(target, input);
+
+        let mut reader = &input[..];
+        let mut stream = CodedInputStream::new(&mut reader);
+        assert!(stream.read_raw_bytes_into(8, &mut target).is_err());
+        assert_eq!(target, input);
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn truncated_bytes_feature_reads_return_error() {
+        let input = [1, 2];
+        let mut reader = &input[..];
+        let mut stream = CodedInputStream::new(&mut reader);
+        assert!(stream.read_raw_callerche_bytes(8).is_err());
+
+        let mut reader = &input[..];
+        let mut stream = CodedInputStream::new(&mut reader);
+        assert_eq!(&stream.read_raw_callerche_bytes(2).unwrap()[..], &input);
     }
 
     #[test]
