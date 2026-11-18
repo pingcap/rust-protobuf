@@ -19,7 +19,9 @@
 //! protobuf implementations, including `protoc` command which can decode
 //! and encode messages using text format.
 
+use atomic_flags::{RedactLevel, REDACT_LEVEL};
 use core::Message;
+use std::sync::atomic::Ordering;
 use reflect::ProtobufValueRef;
 use reflect::ReflectFieldRef;
 use std;
@@ -127,9 +129,12 @@ pub fn unescape_string(string: &str) -> Vec<u8> {
     }
 }
 
-fn print_str_to(s: &str, buf: &mut String) {
-    // TODO: keep printable Unicode
-    quote_escape_bytes_to(s.as_bytes(), buf);
+fn print_sensitive_bytes_to(bytes: &[u8], buf: &mut String) {
+    match REDACT_LEVEL.load(Ordering::Relaxed) {
+        RedactLevel::Off => quote_escape_bytes_to(bytes, buf),
+        RedactLevel::On => buf.push_str("\"?\""),
+        RedactLevel::Marker => buf.push_str("\"‹?›\""),
+    }
 }
 
 fn do_indent(buf: &mut String, pretty: bool, indent: usize) {
@@ -187,11 +192,11 @@ fn print_field(
         }
         ProtobufValueRef::String(s) => {
             buf.push_str(": ");
-            print_str_to(s, buf);
+            print_sensitive_bytes_to(s.as_bytes(), buf);
         }
         ProtobufValueRef::Bytes(b) => {
             buf.push_str(": ");
-            quote_escape_bytes_to(b, buf);
+            print_sensitive_bytes_to(b, buf);
         }
         ProtobufValueRef::I32(v) => {
             write!(buf, ": {}", v).unwrap();
