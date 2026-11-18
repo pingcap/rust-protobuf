@@ -18,6 +18,34 @@ use float;
 use ident::RustIdent;
 use inside::protobuf_crate_path;
 
+// Direct descriptor callers may use hex defaults instead of protoc's decimal form.
+// Normalize them before parsing the field's type, so range checks still apply and
+// descriptor text is never emitted as Rust tokens.
+fn parse_integer_default<T: ::std::str::FromStr>(value: &str) -> T {
+    let (sign, digits) = if value.starts_with('-') || value.starts_with('+') {
+        (&value[..1], &value[1..])
+    } else {
+        ("", value)
+    };
+    let normalized;
+    let value = if digits.starts_with("0x") || digits.starts_with("0X") {
+        let digits = &digits[2..];
+        assert!(
+            !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_hexdigit()),
+            "invalid integer default: {:?}",
+            value
+        );
+        let magnitude = u64::from_str_radix(digits, 16).expect("invalid hex integer default");
+        normalized = format!("{}{}", sign, magnitude);
+        &normalized
+    } else {
+        value
+    };
+    value
+        .parse()
+        .unwrap_or_else(|_| panic!("invalid integer default: {:?}", value))
+}
+
 fn type_is_copy(field_type: FieldDescriptorProto_Type) -> bool {
     match field_type {
         FieldDescriptorProto_Type::TYPE_MESSAGE
@@ -737,27 +765,23 @@ impl<'a> FieldGen<'a> {
                 | FieldDescriptorProto_Type::TYPE_SINT32
                 | FieldDescriptorProto_Type::TYPE_SFIXED32 => format!(
                     "{}i32",
-                    proto_default.parse::<i32>().expect("invalid int32 default")
+                    parse_integer_default::<i32>(proto_default)
                 ),
                 FieldDescriptorProto_Type::TYPE_UINT32
                 | FieldDescriptorProto_Type::TYPE_FIXED32 => format!(
                     "{}u32",
-                    proto_default
-                        .parse::<u32>()
-                        .expect("invalid uint32 default")
+                    parse_integer_default::<u32>(proto_default)
                 ),
                 FieldDescriptorProto_Type::TYPE_INT64
                 | FieldDescriptorProto_Type::TYPE_SINT64
                 | FieldDescriptorProto_Type::TYPE_SFIXED64 => format!(
                     "{}i64",
-                    proto_default.parse::<i64>().expect("invalid int64 default")
+                    parse_integer_default::<i64>(proto_default)
                 ),
                 FieldDescriptorProto_Type::TYPE_UINT64
                 | FieldDescriptorProto_Type::TYPE_FIXED64 => format!(
                     "{}u64",
-                    proto_default
-                        .parse::<u64>()
-                        .expect("invalid uint64 default")
+                    parse_integer_default::<u64>(proto_default)
                 ),
 
                 // For booleans, "true" or "false"

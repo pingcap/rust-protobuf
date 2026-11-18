@@ -329,6 +329,16 @@ fn valid_scalar_defaults_are_generated() {
         (TYPE_INT64, "-9223372036854775808"),
         (TYPE_UINT64, "18446744073709551615"),
         (TYPE_BOOL, "true"),
+        (TYPE_INT32, "0x2a"),
+        (TYPE_SINT32, "-0x2a"),
+        (TYPE_SFIXED32, "-0x80000000"),
+        (TYPE_UINT32, "0xffffffff"),
+        (TYPE_FIXED32, "+0X2A"),
+        (TYPE_INT64, "-0x8000000000000000"),
+        (TYPE_SINT64, "-0X2A"),
+        (TYPE_SFIXED64, "0x7fffffffffffffff"),
+        (TYPE_UINT64, "0xffffffffffffffff"),
+        (TYPE_FIXED64, "0x2a"),
     ]
     .iter()
     .enumerate()
@@ -353,8 +363,58 @@ fn valid_scalar_defaults_are_generated() {
         "-9223372036854775808i64",
         "18446744073709551615u64",
         "unwrap_or(true)",
+        "42i32",
+        "-42i32",
+        "42u32",
+        "-42i64",
+        "9223372036854775807i64",
+        "42u64",
     ] {
         assert!(code.contains(value), "missing {}", value);
+    }
+}
+
+#[test]
+fn rejects_invalid_hex_integer_defaults() {
+    use protobuf::descriptor::FieldDescriptorProto_Type::*;
+    for &(typ, value) in &[
+        (TYPE_INT32, "0x80000000"),
+        (TYPE_INT32, "-0x80000001"),
+        (TYPE_UINT32, "0x100000000"),
+        (TYPE_UINT32, "-0x1"),
+        (TYPE_INT64, "0x8000000000000000"),
+        (TYPE_INT64, "-0x8000000000000001"),
+        (TYPE_UINT64, "0x10000000000000000"),
+        (TYPE_UINT64, "-0x1"),
+        (TYPE_INT32, "0x"),
+        (TYPE_INT32, "0x+2a"),
+        (TYPE_INT32, "0x-2a"),
+        (TYPE_INT32, "0x2ai32"),
+        (TYPE_INT32, "0x2a; panic!(\"injected\")"),
+        (TYPE_INT32, "0x{ panic!(\"injected\"); 42 }"),
+    ] {
+        let mut file = FileDescriptorProto::new();
+        file.set_name("invalid_default.proto".to_owned());
+        let mut message = DescriptorProto::new();
+        message.set_name("Test".to_owned());
+        let mut field = FieldDescriptorProto::new();
+        field.set_name("value".to_owned());
+        field.set_number(1);
+        field.set_field_type(typ);
+        field.set_default_value(value.to_owned());
+        message.mut_field().push(field);
+        file.mut_message_type().push(message);
+        assert!(
+            ::std::panic::catch_unwind(|| gen(
+                &[file],
+                &["invalid_default.proto".to_owned()],
+                &Customize::default()
+            ))
+            .is_err(),
+            "accepted {:?} default {:?}",
+            typ,
+            value
+        );
     }
 }
 
