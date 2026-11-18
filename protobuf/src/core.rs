@@ -313,7 +313,7 @@ pub fn hex_escape(data: &[u8], buf: &mut String) {
     hex::ToHex::write_hex_upper(&data, buf).unwrap();
 }
 
-pub fn redact_bytes(data: &[u8], buf: &mut String) {
+pub fn redact_bytes(_data: &[u8], buf: &mut String) {
     buf.push('?')
 }
 
@@ -364,7 +364,11 @@ impl PbPrint for String {
             return;
         }
         push_field_start(name, buf);
-        escape(self.as_bytes(), buf);
+        match REDACT_LEVEL.load(Ordering::Relaxed) {
+            RedactLevel::On => redact_bytes(self.as_bytes(), buf),
+            RedactLevel::Marker => redact_bytes_with_marker(self.as_bytes(), buf),
+            RedactLevel::Off => escape(self.as_bytes(), buf),
+        }
     }
 }
 

@@ -16,7 +16,7 @@ pub const DEFAULT_REDACT_MARKER_TAIL: &str = "›";
 /// RedactLevel is used to control the redaction of log data.
 ///
 /// Default is `Off`, means no redaction. And `Marker` is a
-/// special flag used to dedact the raw data.
+/// special flag that wraps hex-encoded data in markers for later redaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum RedactLevel {
@@ -24,12 +24,12 @@ pub enum RedactLevel {
     Off,
     /// Redact the data with the '?'.
     On,
-    /// Redact the data with the `‹..›`.
-    Marker, // flag is ‹..›
+    /// Preserve the hex-encoded data inside `‹..›` for later redaction.
+    Marker,
 }
 
-/// If `REDACT_LEVEL` is set, all bytes and strings will be
-/// formatted as "?"
+/// `On` replaces bytes and strings with "?"; `Marker` preserves their
+/// hex-encoded contents inside markers.
 pub(crate) static REDACT_LEVEL: Atomic<RedactLevel> = Atomic::new(RedactLevel::Off);
 
 /// Set redact level.
