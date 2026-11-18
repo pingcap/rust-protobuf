@@ -19,6 +19,7 @@ pub enum ConvertError {
     UnsupportedExtensionType(String, String),
     StrLitDecodeError(StrLitDecodeError),
     DefaultValueIsNotStringLiteral,
+    InvalidDefaultValue,
     WrongOptionType,
 }
 
@@ -266,6 +267,15 @@ impl AbsolutePath {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn rejects_braced_expression_as_field_default() {
+        let proto = r#"syntax = "proto2"; message Test {
+            optional bool b = 1 [default = {::std::process::exit(1); false}];
+        }"#;
+        let parsed = model::FileDescriptor::parse(proto.to_owned()).unwrap();
+        assert!(matches!(file_descriptor("test.proto".to_owned(), &parsed, &[]), Err(ConvertError::InvalidDefaultValue)));
+    }
 
     #[test]
     fn absolute_path_push_simple() {
@@ -567,6 +577,9 @@ impl<'a> Resolver<'a> {
                     } else {
                         return Err(ConvertError::DefaultValueIsNotStringLiteral);
                     }
+                }
+                _ if matches!(*default, model::ProtobufConstant::BracedExpr(_)) => {
+                    return Err(ConvertError::InvalidDefaultValue);
                 }
                 _ => {
                     default.format()
