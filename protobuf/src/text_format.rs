@@ -20,13 +20,13 @@
 //! and encode messages using text format.
 
 use atomic_flags::{RedactLevel, REDACT_LEVEL};
-use core::Message;
-use std::sync::atomic::Ordering;
+use core::{redact_bytes_with_marker, Message};
 use reflect::ProtobufValueRef;
 use reflect::ReflectFieldRef;
 use std;
 use std::fmt;
 use std::fmt::Write;
+use std::sync::atomic::Ordering;
 
 fn quote_bytes_to(bytes: &[u8], buf: &mut String) {
     for &c in bytes {
@@ -133,7 +133,11 @@ fn print_sensitive_bytes_to(bytes: &[u8], buf: &mut String) {
     match REDACT_LEVEL.load(Ordering::Relaxed) {
         RedactLevel::Off => quote_escape_bytes_to(bytes, buf),
         RedactLevel::On => buf.push_str("\"?\""),
-        RedactLevel::Marker => buf.push_str("\"‹?›\""),
+        RedactLevel::Marker => {
+            buf.push('"');
+            redact_bytes_with_marker(bytes, buf);
+            buf.push('"');
+        }
     }
 }
 

@@ -317,9 +317,9 @@ pub fn redact_bytes(_data: &[u8], buf: &mut String) {
     buf.push('?')
 }
 
-pub fn redact_bytes_with_marker(_data: &[u8], buf: &mut String) {
+pub fn redact_bytes_with_marker(data: &[u8], buf: &mut String) {
     buf.push_str(DEFAULT_REDACT_MARKER_HEAD);
-    buf.push('?');
+    hex_escape(data, buf);
     buf.push_str(DEFAULT_REDACT_MARKER_TAIL);
 }
 
