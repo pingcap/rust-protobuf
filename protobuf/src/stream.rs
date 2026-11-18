@@ -964,6 +964,9 @@ pub struct CodedOutputStream<'a> {
     buffer: &'a mut [u8],
     // within buffer
     position: usize,
+
+    // It's only works for `Write` trait.
+    pub use_internal_buffer: bool,
 }
 
 impl<'a> CodedOutputStream<'a> {
@@ -984,6 +987,7 @@ impl<'a> CodedOutputStream<'a> {
             target: OutputTarget::Write(writer, buffer_storage),
             buffer: buffer,
             position: 0,
+            use_internal_buffer: true,
         }
     }
 
@@ -995,6 +999,7 @@ impl<'a> CodedOutputStream<'a> {
             target: OutputTarget::Bytes,
             buffer: bytes,
             position: 0,
+            use_internal_buffer: true,
         }
     }
 
@@ -1007,6 +1012,7 @@ impl<'a> CodedOutputStream<'a> {
             target: OutputTarget::Vec(vec),
             buffer: &mut [],
             position: 0,
+            use_internal_buffer: true,
         }
     }
 
@@ -1063,6 +1069,14 @@ impl<'a> CodedOutputStream<'a> {
 
     /// Write a byte
     pub fn write_raw_byte(&mut self, byte: u8) -> ProtobufResult<()> {
+        if !self.use_internal_buffer {
+            match self.target {
+                OutputTarget::Write(ref mut w, _) => w.write_all(&[byte])?,
+                _ => unreachable!(),
+            }
+            return Ok(());
+        }
+
         if self.position as usize == self.buffer.len() {
             self.refresh_buffer()?;
         }
@@ -1073,6 +1087,14 @@ impl<'a> CodedOutputStream<'a> {
 
     /// Write bytes
     pub fn write_raw_bytes(&mut self, bytes: &[u8]) -> ProtobufResult<()> {
+        if !self.use_internal_buffer {
+            match self.target {
+                OutputTarget::Write(ref mut w, _) => w.write_all(bytes)?,
+                _ => unreachable!(),
+            }
+            return Ok(());
+        }
+
         if bytes.len() <= self.buffer.len() - self.position {
             let bottom = self.position as usize;
             let top = bottom + (bytes.len() as usize);
@@ -1119,7 +1141,7 @@ impl<'a> CodedOutputStream<'a> {
 
     /// Write varint
     pub fn write_raw_varint32(&mut self, value: u32) -> ProtobufResult<()> {
-        if self.buffer.len() - self.position >= 5 {
+        if self.use_internal_buffer && self.buffer.len() - self.position >= 5 {
             // fast path
             let len = varint::encode_varint32(value, &mut self.buffer[self.position..]);
             self.position += len;
@@ -1134,7 +1156,7 @@ impl<'a> CodedOutputStream<'a> {
 
     /// Write varint
     pub fn write_raw_varint64(&mut self, value: u64) -> ProtobufResult<()> {
-        if self.buffer.len() - self.position >= 10 {
+        if self.use_internal_buffer && self.buffer.len() - self.position >= 10 {
             // fast path
             let len = varint::encode_varint64(value, &mut self.buffer[self.position..]);
             self.position += len;
